@@ -10,14 +10,17 @@ The function is deliberately self-contained: short timeout, graceful
 degradation on any HTTP or parse failure, and a string return type so
 the calling agent gets a uniform interface regardless of whether the
 network call succeeded.
+
+Uses ``requests`` (not stdlib ``urllib``) so the module automatically
+honors the ``HTTP_PROXY`` / ``HTTPS_PROXY`` / ``NO_PROXY`` environment
+variables — including ``socks5://`` proxies when ``PySocks`` is installed.
 """
 
 from __future__ import annotations
 
-import http.client
-import json
 import logging
-from urllib.request import Request, urlopen
+
+import requests
 
 from .symbol_utils import crypto_base
 
@@ -47,13 +50,17 @@ def fetch_stocktwits_messages(ticker: str, limit: int = 30, timeout: float = 10.
     caller never has to special-case None or exceptions.
     """
     url = _API.format(ticker=_stocktwits_symbol(ticker))
-    req = Request(url, headers={"User-Agent": _UA, "Accept": "application/json"})
     try:
-        with urlopen(req, timeout=timeout) as resp:
-            data = json.loads(resp.read())
-    except (OSError, http.client.HTTPException, json.JSONDecodeError) as exc:
-        # OSError covers URLError/TimeoutError/connection resets; HTTPException
-        # covers chunked-transfer errors (IncompleteRead/BadStatusLine, #1024).
+        resp = requests.get(
+            url,
+            headers={"User-Agent": _UA, "Accept": "application/json"},
+            timeout=timeout,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+    except (requests.RequestException, ValueError) as exc:
+        # RequestException covers ConnectionError/Timeout/ProxyError/HTTPError;
+        # ValueError covers malformed JSON bodies.
         logger.warning("StockTwits fetch failed for %s: %s", ticker, exc)
         return f"<stocktwits unavailable: {type(exc).__name__}>"
 

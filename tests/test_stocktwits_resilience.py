@@ -7,26 +7,19 @@ transport error must degrade to a placeholder rather than raise.
 
 from __future__ import annotations
 
-import http.client
 from unittest.mock import patch
-from urllib.error import HTTPError
 
 import pytest
+import requests
 
 from tradingagents.dataflows import stocktwits
 
 
 def _raise(exc):
-    class _Resp:
-        def __enter__(self_inner):
-            return self_inner
-
-        def __exit__(self_inner, *a):
-            return False
-
-        def read(self_inner):
-            raise exc
-    return _Resp()
+    """Side-effect factory: returns a callable that raises ``exc``."""
+    def _side_effect(*a, **kw):
+        raise exc
+    return _side_effect
 
 
 @pytest.mark.unit
@@ -34,13 +27,15 @@ class TestStockTwitsResilience:
     @pytest.mark.parametrize(
         "exc",
         [
-            http.client.IncompleteRead(b""),
-            HTTPError("url", 503, "down", {}, None),
-            TimeoutError("slow"),
+            requests.exceptions.ConnectionError("remote closed"),
+            requests.exceptions.HTTPError("503 down"),
+            requests.exceptions.Timeout("slow"),
+            requests.exceptions.ProxyError("proxy down"),
+            ValueError("malformed json"),  # json decoding failure branch
         ],
     )
     def test_transport_errors_return_placeholder(self, exc):
-        with patch.object(stocktwits, "urlopen", return_value=_raise(exc)):
+        with patch.object(stocktwits.requests, "get", side_effect=_raise(exc)):
             out = stocktwits.fetch_stocktwits_messages("NVDA")
         assert "unavailable" in out.lower()
         assert out.startswith("<stocktwits unavailable")
@@ -68,10 +63,10 @@ class TestStockTwitsCryptoSymbols:
     def test_crypto_pair_requests_dot_x_endpoint(self):
         seen = {}
 
-        def fake_urlopen(req, timeout=None):
-            seen["url"] = req.full_url
-            raise TimeoutError("stop after capturing the URL")
+        def fake_get(url, **kwargs):
+            seen["url"] = url
+            raise requests.exceptions.Timeout("stop after capturing the URL")
 
-        with patch.object(stocktwits, "urlopen", side_effect=fake_urlopen):
+        with patch.object(stocktwits.requests, "get", side_effect=fake_get):
             stocktwits.fetch_stocktwits_messages("BTC-USD")
         assert "/symbol/BTC.X.json" in seen["url"]

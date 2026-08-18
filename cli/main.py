@@ -3,6 +3,7 @@ import os
 import sys
 import time
 from collections import deque
+from contextlib import nullcontext
 from functools import wraps
 from pathlib import Path
 
@@ -21,6 +22,7 @@ from rich.text import Text
 
 from cli.announcements import display_announcements, fetch_announcements
 from cli.stats_handler import StatsCallbackHandler
+from cli.models import AnalystType, AssetType
 from cli.utils import (
     ask_anthropic_effort,
     ask_gemini_thinking_config,
@@ -32,7 +34,9 @@ from cli.utils import (
     confirm_ollama_endpoint,
     detect_asset_type,
     ensure_api_key,
+    filter_analysts_for_asset_type,
     get_ticker,
+    normalize_ticker_symbol,
     prompt_openai_compatible_url,
     resolve_backend_url,
     select_analysts,
@@ -70,6 +74,11 @@ app = typer.Typer(
     help="TradingAgents CLI: Multi-Agents LLM Financial Trading Framework",
     add_completion=True,  # Enable shell completion
 )
+
+
+@app.callback()
+def _cli_callback():
+    """TradingAgents CLI entry point."""
 
 
 # Create a deque to store recent messages with a maximum length
@@ -492,36 +501,45 @@ def update_display(layout, spinner_text=None, stats_handler=None, start_time=Non
     layout["footer"].update(Panel(stats_table, border_style="grey50"))
 
 
-def get_user_selections():
-    """Get all user selections before starting the analysis display."""
-    # Display ASCII art welcome message
-    with open(Path(__file__).parent / "static" / "welcome.txt", encoding="utf-8") as f:
-        welcome_ascii = f.read()
+def get_user_selections(cli_overrides: dict | None = None):
+    """Get all user selections before starting the analysis display.
 
-    # Create welcome box content
-    welcome_content = f"{welcome_ascii}\n"
-    welcome_content += "[bold green]TradingAgents: Multi-Agents LLM Financial Trading Framework - CLI[/bold green]\n\n"
-    welcome_content += "[bold]Workflow Steps:[/bold]\n"
-    welcome_content += "I. Analyst Team → II. Research Team → III. Trader → IV. Risk Management → V. Portfolio Management\n\n"
-    welcome_content += (
-        "[dim]Built by [Tauric Research](https://github.com/TauricResearch)[/dim]"
-    )
+    When ``cli_overrides`` contains ``ticker``, ``date``, ``asset_type`` or
+    ``analysts``, the corresponding interactive prompt is skipped. This makes
+    the CLI usable from cronjobs and other non-interactive callers.
+    """
+    cli_overrides = cli_overrides or {}
+    headless = cli_overrides.get("headless", False)
 
-    # Create and center the welcome box
-    welcome_box = Panel(
-        welcome_content,
-        border_style="green",
-        padding=(1, 2),
-        title="Welcome to TradingAgents",
-        subtitle="Multi-Agents LLM Financial Trading Framework",
-    )
-    console.print(Align.center(welcome_box))
-    console.print()
-    console.print()  # Add vertical space before announcements
+    # Display ASCII art welcome message (only in interactive mode)
+    if not headless:
+        with open(Path(__file__).parent / "static" / "welcome.txt", encoding="utf-8") as f:
+            welcome_ascii = f.read()
 
-    # Fetch and display announcements (silent on failure)
-    announcements = fetch_announcements()
-    display_announcements(console, announcements)
+        # Create welcome box content
+        welcome_content = f"{welcome_ascii}\n"
+        welcome_content += "[bold green]TradingAgents: Multi-Agents LLM Financial Trading Framework - CLI[/bold green]\n\n"
+        welcome_content += "[bold]Workflow Steps:[/bold]\n"
+        welcome_content += "I. Analyst Team → II. Research Team → III. Trader → IV. Risk Management → V. Portfolio Management\n\n"
+        welcome_content += (
+            "[dim]Built by [Tauric Research](https://github.com/TauricResearch)[/dim]"
+        )
+
+        # Create and center the welcome box
+        welcome_box = Panel(
+            welcome_content,
+            border_style="green",
+            padding=(1, 2),
+            title="Welcome to TradingAgents",
+            subtitle="Multi-Agents LLM Financial Trading Framework",
+        )
+        console.print(Align.center(welcome_box))
+        console.print()
+        console.print()  # Add vertical space before announcements
+
+        # Fetch and display announcements (silent on failure)
+        announcements = fetch_announcements()
+        display_announcements(console, announcements)
 
     # Create a boxed questionnaire for each step
     def create_question_box(title, prompt, default=None):
@@ -546,32 +564,72 @@ def get_user_selections():
         return prompt_fn()
 
     # Step 1: Ticker symbol
-    console.print(
-        create_question_box(
-            "Step 1: Ticker Symbol",
-            "Enter the ticker, with exchange suffix when needed (e.g. SPY, 0700.HK, BTC-USD)",
-            "SPY",
-        )
-    )
-    selected_ticker = get_ticker()
-    asset_type = detect_asset_type(selected_ticker)
-    # Only announce when it's not the default stock path, to avoid printing
-    # "stock" on every run.
-    if asset_type.value != "stock":
-        console.print(
-            f"[green]Detected asset type:[/green] {asset_type.value}"
-        )
+    selected_ticker = cli_overrides.get("ticker")
+    if selected_ticker:
+        selected_ticker = normalize_ticker_symbol(selected_ticker)
+        if not headless:
+            console.print(
+                f"[green]✓ Ticker from command line:[/green] {selected_ticker}"
+            )
+    else:
+        if not headless:
+            console.print(
+                create_question_box(
+                    "Step 1: Ticker Symbol",
+                    "Enter the ticker, with exchange suffix when needed (e.g. SPY, 0700.HK, BTC-USD)",
+                    "SPY",
+                )
+            )
+        selected_ticker = get_ticker()
+
+    # Step 1b: Asset type (can be overridden from CLI)
+    asset_type_override = cli_overrides.get("asset_type")
+    if asset_type_override:
+        asset_type_value = asset_type_override.strip().lower()
+        if asset_type_value not in ("stock", "crypto"):
+            console.print(
+                f"[red]Error: Invalid asset type '{asset_type_override}'. Use 'stock' or 'crypto'.[/red]"
+            )
+            raise typer.Exit(code=1)
+        asset_type = AssetType(asset_type_value)
+        if not headless:
+            console.print(
+                f"[green]✓ Asset type from command line:[/green] {asset_type.value}"
+            )
+    else:
+        asset_type = detect_asset_type(selected_ticker)
+        # Only announce when it's not the default stock path, to avoid printing
+        # "stock" on every run.
+        if asset_type.value != "stock" and not headless:
+            console.print(
+                f"[green]Detected asset type:[/green] {asset_type.value}"
+            )
 
     # Step 2: Analysis date
-    default_date = datetime.datetime.now().strftime("%Y-%m-%d")
-    console.print(
-        create_question_box(
-            "Step 2: Analysis Date",
-            "Enter the analysis date (YYYY-MM-DD)",
-            default_date,
-        )
-    )
-    analysis_date = get_analysis_date()
+    analysis_date = cli_overrides.get("date")
+    if analysis_date:
+        try:
+            datetime.datetime.strptime(analysis_date, "%Y-%m-%d")
+        except ValueError:
+            console.print(
+                "[red]Error: Invalid date format. Please use YYYY-MM-DD.[/red]"
+            )
+            raise typer.Exit(code=1)
+        if not headless:
+            console.print(
+                f"[green]✓ Analysis date from command line:[/green] {analysis_date}"
+            )
+    else:
+        if not headless:
+            default_date = datetime.datetime.now().strftime("%Y-%m-%d")
+            console.print(
+                create_question_box(
+                    "Step 2: Analysis Date",
+                    "Enter the analysis date (YYYY-MM-DD)",
+                    default_date,
+                )
+            )
+        analysis_date = get_analysis_date()
 
     # Step 3: Output language (skipped when set via TRADINGAGENTS_OUTPUT_LANGUAGE)
     if os.environ.get("TRADINGAGENTS_OUTPUT_LANGUAGE"):
@@ -589,15 +647,43 @@ def get_user_selections():
         output_language = ask_output_language()
 
     # Step 4: Select analysts
-    console.print(
-        create_question_box(
-            "Step 4: Analysts Team", "Select your LLM analyst agents for the analysis"
+    analysts_override = cli_overrides.get("analysts")
+    if analysts_override:
+        analyst_strs = [a.strip().lower() for a in analysts_override.split(",")]
+        analyst_map = {a.value: a for a in AnalystType}
+        invalid = [a for a in analyst_strs if a not in analyst_map]
+        if invalid:
+            console.print(
+                f"[red]Error: Invalid analyst(s): {', '.join(invalid)}. "
+                "Use: market, social, news, fundamentals.[/red]"
+            )
+            raise typer.Exit(code=1)
+        selected_analysts = [analyst_map[a] for a in analyst_strs]
+        selected_analysts = filter_analysts_for_asset_type(
+            selected_analysts, asset_type
         )
-    )
-    selected_analysts = select_analysts(asset_type)
-    console.print(
-        f"[green]Selected analysts:[/green] {', '.join(analyst.value for analyst in selected_analysts)}"
-    )
+        if not selected_analysts:
+            console.print(
+                "[red]Error: No valid analysts remain for the selected asset type.[/red]"
+            )
+            raise typer.Exit(code=1)
+        if not headless:
+            console.print(
+                f"[green]✓ Analysts from command line:[/green] "
+                f"{', '.join(analyst.value for analyst in selected_analysts)}"
+            )
+    else:
+        if not headless:
+            console.print(
+                create_question_box(
+                    "Step 4: Analysts Team", "Select your LLM analyst agents for the analysis"
+                )
+            )
+        selected_analysts = select_analysts(asset_type)
+        if not headless:
+            console.print(
+                f"[green]Selected analysts:[/green] {', '.join(analyst.value for analyst in selected_analysts)}"
+            )
 
     # Step 5: Research depth (skipped when both round counts are set via env).
     # Research depth maps to the debate + risk round counts; when both are
@@ -1001,9 +1087,16 @@ def _build_run_config(selections: dict, checkpoint: bool | None) -> dict:
     return config
 
 
-def run_analysis(checkpoint: bool | None = None):
-    # First get all user selections
-    selections = get_user_selections()
+def run_analysis(
+    checkpoint: bool | None = None,
+    cli_overrides: dict | None = None,
+):
+    cli_overrides = cli_overrides or {}
+    headless = cli_overrides.get("headless", False)
+    auto_save = cli_overrides.get("auto_save", False)
+
+    # First get all user selections (interactive prompts skipped when CLI args provided)
+    selections = get_user_selections(cli_overrides)
 
     config = _build_run_config(selections, checkpoint)
 
@@ -1078,12 +1171,18 @@ def run_analysis(checkpoint: bool | None = None):
     message_buffer.add_tool_call = save_tool_call_decorator(message_buffer, "add_tool_call")
     message_buffer.update_report_section = save_report_section_decorator(message_buffer, "update_report_section")
 
-    # Now start the display layout
-    layout = create_layout()
+    # Now start the display layout (skip rich Live UI in headless/cron mode)
+    if headless:
+        layout = None
+        live_cm = nullcontext()
+    else:
+        layout = create_layout()
+        live_cm = Live(layout, refresh_per_second=4)
 
-    with Live(layout, refresh_per_second=4):
-        # Initial display
-        update_display(layout, stats_handler=stats_handler, start_time=start_time)
+    with live_cm:
+        if layout is not None:
+            # Initial display
+            update_display(layout, stats_handler=stats_handler, start_time=start_time)
 
         # Add initial messages
         message_buffer.add_message("System", f"Selected ticker: {selections['ticker']}")
@@ -1096,19 +1195,22 @@ def run_analysis(checkpoint: bool | None = None):
             "System",
             f"Selected analysts: {', '.join(analyst.value for analyst in selections['analysts'])}",
         )
-        update_display(layout, stats_handler=stats_handler, start_time=start_time)
+        if layout is not None:
+            update_display(layout, stats_handler=stats_handler, start_time=start_time)
 
         # Update agent status to in_progress for the first analyst
         first_analyst = get_initial_analyst_node(analyst_execution_plan)
         message_buffer.update_agent_status(first_analyst, "in_progress")
         analyst_wall_time_tracker.mark_started(selected_analyst_keys[0])
-        update_display(layout, stats_handler=stats_handler, start_time=start_time)
+        if layout is not None:
+            update_display(layout, stats_handler=stats_handler, start_time=start_time)
 
         # Create spinner text
         spinner_text = (
             f"Analyzing {selections['ticker']} on {selections['analysis_date']}..."
         )
-        update_display(layout, spinner_text, stats_handler=stats_handler, start_time=start_time)
+        if layout is not None:
+            update_display(layout, spinner_text, stats_handler=stats_handler, start_time=start_time)
 
         # Initialize state and get graph args with callbacks.
         # Resolve the instrument identity once here so all agents anchor to
@@ -1227,7 +1329,8 @@ def run_analysis(checkpoint: bool | None = None):
                     message_buffer.update_agent_status("Portfolio Manager", "completed")
 
             # Update the display
-            update_display(layout, stats_handler=stats_handler, start_time=start_time)
+            if layout is not None:
+                update_display(layout, stats_handler=stats_handler, start_time=start_time)
 
             trace.append(chunk)
 
@@ -1251,33 +1354,45 @@ def run_analysis(checkpoint: bool | None = None):
             if section in final_state:
                 message_buffer.update_report_section(section, final_state[section])
 
-        update_display(layout, stats_handler=stats_handler, start_time=start_time)
+        if layout is not None:
+            update_display(layout, stats_handler=stats_handler, start_time=start_time)
 
-    # Post-analysis prompts (outside Live context for clean interaction)
-    console.print("\n[bold cyan]Analysis Complete![/bold cyan]\n")
-    console.print(f"[dim]{analyst_wall_time_tracker.format_summary()}[/dim]")
+    # Post-analysis handling (interactive prompts skipped in headless/auto-save mode)
+    if not headless:
+        console.print("\n[bold cyan]Analysis Complete![/bold cyan]\n")
+        console.print(f"[dim]{analyst_wall_time_tracker.format_summary()}[/dim]")
 
-    # Prompt to save report
-    save_choice = typer.prompt("Save report?", default="Y").strip().upper()
-    if save_choice in ("Y", "YES", ""):
+    if auto_save:
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        default_path = Path.cwd() / "reports" / f"{selections['ticker']}_{timestamp}"
-        save_path_str = typer.prompt(
-            "Save path (press Enter for default)",
-            default=str(default_path)
-        ).strip()
-        save_path = Path(save_path_str)
+        save_path = Path.cwd() / "reports" / f"{selections['ticker']}_{timestamp}"
         try:
             report_file = save_report_to_disk(final_state, selections["ticker"], save_path)
-            console.print(f"\n[green]✓ Report saved to:[/green] {save_path.resolve()}")
+            console.print(f"[green]✓ Report auto-saved to:[/green] {save_path.resolve()}")
             console.print(f"  [dim]Complete report:[/dim] {report_file.name}")
         except Exception as e:
             console.print(f"[red]Error saving report: {e}[/red]")
+    elif not headless:
+        # Prompt to save report
+        save_choice = typer.prompt("Save report?", default="Y").strip().upper()
+        if save_choice in ("Y", "YES", ""):
+            timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+            default_path = Path.cwd() / "reports" / f"{selections['ticker']}_{timestamp}"
+            save_path_str = typer.prompt(
+                "Save path (press Enter for default)",
+                default=str(default_path)
+            ).strip()
+            save_path = Path(save_path_str)
+            try:
+                report_file = save_report_to_disk(final_state, selections["ticker"], save_path)
+                console.print(f"\n[green]✓ Report saved to:[/green] {save_path.resolve()}")
+                console.print(f"  [dim]Complete report:[/dim] {report_file.name}")
+            except Exception as e:
+                console.print(f"[red]Error saving report: {e}[/red]")
 
-    # Prompt to display full report
-    display_choice = typer.prompt("\nDisplay full report on screen?", default="Y").strip().upper()
-    if display_choice in ("Y", "YES", ""):
-        display_complete_report(final_state)
+        # Prompt to display full report
+        display_choice = typer.prompt("\nDisplay full report on screen?", default="Y").strip().upper()
+        if display_choice in ("Y", "YES", ""):
+            display_complete_report(final_state)
 
 
 @app.command()
@@ -1293,13 +1408,56 @@ def analyze(
         "--clear-checkpoints",
         help="Delete all saved checkpoints before running (force fresh start).",
     ),
+    ticker: str | None = typer.Option(
+        None,
+        "--ticker", "-t",
+        help="Ticker symbol (e.g. SPY, 0700.HK, BTC-USD). Skips interactive prompt.",
+    ),
+    date: str | None = typer.Option(
+        None,
+        "--date", "-d",
+        help="Analysis date in YYYY-MM-DD format. Defaults to today. Skips interactive prompt.",
+    ),
+    asset_type: str | None = typer.Option(
+        None,
+        "--asset-type", "-a",
+        help="Asset type: stock or crypto. Auto-detected from ticker when omitted.",
+    ),
+    analysts: str | None = typer.Option(
+        None,
+        "--analysts",
+        help="Comma-separated analysts: market,social,news,fundamentals. Skips interactive prompt.",
+    ),
+    auto_save: bool = typer.Option(
+        False,
+        "--auto-save/--no-auto-save",
+        help="Automatically save the report without prompting (useful for cronjobs).",
+    ),
+    headless: bool = typer.Option(
+        False,
+        "--headless",
+        help="Suppress non-error console output (useful for cronjobs).",
+    ),
 ):
     if clear_checkpoints:
         from tradingagents.graph.checkpointer import clear_all_checkpoints
         n = clear_all_checkpoints(DEFAULT_CONFIG["data_cache_dir"])
-        console.print(f"[yellow]Cleared {n} checkpoint(s).[/yellow]")
+        if not headless:
+            console.print(f"[yellow]Cleared {n} checkpoint(s).[/yellow]")
+
+    cli_overrides = {
+        k: v for k, v in {
+            "ticker": ticker,
+            "date": date,
+            "asset_type": asset_type,
+            "analysts": analysts,
+            "auto_save": auto_save,
+            "headless": headless,
+        }.items() if v is not None
+    }
+
     try:
-        run_analysis(checkpoint=checkpoint)
+        run_analysis(checkpoint=checkpoint, cli_overrides=cli_overrides)
     except _NO_CONSOLE_ERRORS:
         # A terminal with no console buffer cannot host the interactive prompts.
         # Emit one actionable line on stderr instead of a prompt_toolkit

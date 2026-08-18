@@ -10,6 +10,10 @@ off once (honouring ``Retry-After``). RSS lacks score / comment counts, so those
 posts are marked and the formatter omits the metrics rather than printing fake
 zeros.
 
+Uses ``requests`` (not stdlib ``urllib``) so the module automatically honors
+``HTTP_PROXY`` / ``HTTPS_PROXY`` / ``NO_PROXY`` environment variables — including
+``socks5://`` proxies when ``PySocks`` is installed.
+
 No API key required. Returns formatted plaintext blocks ready for prompt
 injection and degrades gracefully — returns a placeholder string rather than
 raising, so callers never special-case missing data.
@@ -18,17 +22,15 @@ raising, so callers never special-case missing data.
 from __future__ import annotations
 
 import html
-import http.client
-import json
 import logging
 import re
 import time
 import xml.etree.ElementTree as ET
 from collections.abc import Iterable
 from datetime import datetime
-from urllib.error import HTTPError
 from urllib.parse import urlencode
-from urllib.request import Request, urlopen
+
+import requests
 
 from .symbol_utils import crypto_base
 
@@ -81,10 +83,10 @@ def _strip_html(content: str) -> str:
     return " ".join(html.unescape(text).split())
 
 
-def _retry_after_seconds(exc: HTTPError) -> float | None:
+def _retry_after_seconds(resp: requests.Response) -> float | None:
     """Seconds to wait from a 429's ``Retry-After`` header, capped at 30s."""
     try:
-        val = exc.headers.get("Retry-After") if getattr(exc, "headers", None) else None
+        val = resp.headers.get("Retry-After")
         return min(float(val), 30.0) if val else None
     except (ValueError, TypeError, AttributeError):
         return None
@@ -105,24 +107,36 @@ def _fetch_subreddit_rss(
     present — before giving up, so a transient burst doesn't blank the feed.
     """
     url = _RSS.format(sub=sub, qs=_search_qs(ticker, limit))
-    req = Request(url, headers={"User-Agent": _UA})
     try:
-        with urlopen(req, timeout=timeout) as resp:
-            root = ET.fromstring(resp.read())
-    except HTTPError as exc:
-        if exc.code == 429 and _retry:
-            wait = _retry_after_seconds(exc) or 5.0
-            logger.warning(
-                "Reddit RSS 429 for r/%s · %s — backing off %.1fs then retrying once",
-                sub, ticker, wait,
-            )
-            time.sleep(wait)
-            return _fetch_subreddit_rss(ticker, sub, limit, timeout, _retry=False)
+        resp = requests.get(
+            url,
+            headers={"User-Agent": _UA},
+            timeout=timeout,
+        )
+    except requests.RequestException as exc:
+        # Covers ConnectionError / Timeout / ProxyError / etc.
         logger.warning("Reddit RSS fetch failed for r/%s · %s: %s", sub, ticker, exc)
         return []
-    except (OSError, http.client.HTTPException, ET.ParseError) as exc:
-        # OSError covers URLError/TimeoutError/connection resets; HTTPException
-        # covers chunked-transfer errors (IncompleteRead/BadStatusLine, #1024).
+
+    if resp.status_code == 429 and _retry:
+        wait = _retry_after_seconds(resp) or 5.0
+        logger.warning(
+            "Reddit RSS 429 for r/%s · %s — backing off %.1fs then retrying once",
+            sub, ticker, wait,
+        )
+        time.sleep(wait)
+        return _fetch_subreddit_rss(ticker, sub, limit, timeout, _retry=False)
+
+    if resp.status_code >= 400:
+        logger.warning(
+            "Reddit RSS fetch failed for r/%s · %s: HTTP %s",
+            sub, ticker, resp.status_code,
+        )
+        return []
+
+    try:
+        root = ET.fromstring(resp.content)
+    except ET.ParseError as exc:
         logger.warning("Reddit RSS fetch failed for r/%s · %s: %s", sub, ticker, exc)
         return []
 
@@ -159,13 +173,17 @@ def _fetch_subreddit_json(
     OAuth token is wired in; degrades to RSS on failure.
     """
     url = _API.format(sub=sub, qs=_search_qs(ticker, limit))
-    req = Request(url, headers={"User-Agent": _UA, "Accept": "application/json"})
     try:
-        with urlopen(req, timeout=timeout) as resp:
-            payload = json.loads(resp.read())
+        resp = requests.get(
+            url,
+            headers={"User-Agent": _UA, "Accept": "application/json"},
+            timeout=timeout,
+        )
+        resp.raise_for_status()
+        payload = resp.json()
         children = (payload.get("data") or {}).get("children") or []
         return [c.get("data", {}) for c in children if isinstance(c, dict)]
-    except (OSError, http.client.HTTPException, json.JSONDecodeError) as exc:
+    except (requests.RequestException, ValueError) as exc:
         logger.warning(
             "Reddit JSON fetch failed for r/%s · %s: %s — falling back to RSS feed.",
             sub, ticker, exc,
