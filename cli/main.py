@@ -1,12 +1,18 @@
+import base64
 import datetime
+import hashlib
+import hmac
+import json
 import os
 import sys
 import time
+import urllib.parse
 from collections import deque
 from contextlib import nullcontext
 from functools import wraps
 from pathlib import Path
 
+import requests
 import typer
 from rich import box
 from rich.align import Align
@@ -912,6 +918,90 @@ def display_complete_report(final_state):
             console.print(Panel(Markdown(risk["judge_decision"]), title="Portfolio Manager", border_style="blue", padding=(1, 2)))
 
 
+def _make_dingtalk_sign(timestamp: str, secret: str) -> str:
+    """Generate DingTalk custom webhook signature."""
+    string_to_sign = f"{timestamp}\n{secret}"
+    hmac_code = hmac.new(
+        secret.encode("utf-8"),
+        string_to_sign.encode("utf-8"),
+        digestmod=hashlib.sha256,
+    ).digest()
+    return urllib.parse.quote_plus(base64.b64encode(hmac_code))
+
+
+def _send_dingtalk_webhook(
+    webhook_url: str,
+    secret: str | None,
+    title: str,
+    markdown_text: str,
+    at_mobiles: list[str] | None = None,
+    is_at_all: bool = False,
+) -> None:
+    """Send a Markdown message via DingTalk custom group webhook.
+
+    Args:
+        webhook_url: The webhook URL from the DingTalk robot settings.
+        secret: Optional signing secret (required if "Add signature" is enabled).
+        title: Message title.
+        markdown_text: Markdown body (DingTalk supports a subset of Markdown).
+        at_mobiles: List of phone numbers to @.
+        is_at_all: Whether to @ everyone.
+    """
+    timestamp = str(int(time.time() * 1000))
+    url = webhook_url
+    if secret:
+        sign = _make_dingtalk_sign(timestamp, secret)
+        url = f"{webhook_url}&timestamp={timestamp}&sign={sign}"
+
+    payload = {
+        "msgtype": "markdown",
+        "markdown": {"title": title, "text": markdown_text},
+        "at": {
+            "atMobiles": at_mobiles or [],
+            "isAtAll": is_at_all,
+        },
+    }
+
+    response = requests.post(
+        url,
+        data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
+        headers={"Content-Type": "application/json; charset=utf-8"},
+        timeout=30,
+    )
+    response.raise_for_status()
+    result = response.json()
+    if result.get("errcode") != 0:
+        raise RuntimeError(f"DingTalk webhook error: {result}")
+
+
+def _build_dingtalk_report_message(
+    ticker: str,
+    analysis_date: str,
+    save_path: Path,
+    final_state: dict,
+    max_chars: int = 3000,
+) -> tuple[str, str]:
+    """Build (title, markdown_text) for the DingTalk report notification."""
+    title = f"TradingAgents 分析报告：{ticker} ({analysis_date})"
+
+    decision = ""
+    risk_state = final_state.get("risk_debate_state", {})
+    if risk_state.get("judge_decision"):
+        decision = str(risk_state["judge_decision"])
+    elif final_state.get("final_trade_decision"):
+        decision = str(final_state["final_trade_decision"])
+
+    if len(decision) > max_chars:
+        decision = decision[:max_chars] + "\n\n...（内容已截断）"
+
+    body = (
+        f"## {title}\n\n"
+        f"**报告路径：** `{save_path.resolve()}`\n\n"
+        f"**最终决策：**\n\n{decision or '（无最终决策）'}"
+    )
+    return title, body
+
+
 def update_research_team_status(status):
     """Update status for research team members (not Trader)."""
     research_team = ["Bull Researcher", "Bear Researcher", "Research Manager"]
@@ -1094,6 +1184,10 @@ def run_analysis(
     cli_overrides = cli_overrides or {}
     headless = cli_overrides.get("headless", False)
     auto_save = cli_overrides.get("auto_save", False)
+    dingtalk_webhook_url = cli_overrides.get("dingtalk_webhook_url") or os.environ.get("DINGTALK_WEBHOOK_URL")
+    dingtalk_webhook_secret = cli_overrides.get("dingtalk_webhook_secret") or os.environ.get("DINGTALK_WEBHOOK_SECRET")
+    dingtalk_at_mobiles = cli_overrides.get("dingtalk_at_mobiles") or os.environ.get("DINGTALK_AT_MOBILES", "")
+    dingtalk_at_all = cli_overrides.get("dingtalk_at_all") or os.environ.get("DINGTALK_AT_ALL", "false").lower() in ("1", "true", "yes")
 
     # First get all user selections (interactive prompts skipped when CLI args provided)
     selections = get_user_selections(cli_overrides)
@@ -1371,6 +1465,28 @@ def run_analysis(
             console.print(f"  [dim]Complete report:[/dim] {report_file.name}")
         except Exception as e:
             console.print(f"[red]Error saving report: {e}[/red]")
+
+        # Send DingTalk webhook notification if configured
+        if dingtalk_webhook_url:
+            try:
+                title, markdown_text = _build_dingtalk_report_message(
+                    selections["ticker"],
+                    selections["analysis_date"],
+                    save_path,
+                    final_state,
+                )
+                at_mobiles = [m.strip() for m in dingtalk_at_mobiles.split(",") if m.strip()] if isinstance(dingtalk_at_mobiles, str) else dingtalk_at_mobiles
+                _send_dingtalk_webhook(
+                    dingtalk_webhook_url,
+                    dingtalk_webhook_secret,
+                    title,
+                    markdown_text,
+                    at_mobiles=at_mobiles,
+                    is_at_all=dingtalk_at_all,
+                )
+                console.print("[green]✓ DingTalk notification sent.[/green]")
+            except Exception as e:
+                console.print(f"[red]Error sending DingTalk notification: {e}[/red]")
     elif not headless:
         # Prompt to save report
         save_choice = typer.prompt("Save report?", default="Y").strip().upper()
@@ -1438,6 +1554,26 @@ def analyze(
         "--headless",
         help="Suppress non-error console output (useful for cronjobs).",
     ),
+    dingtalk_webhook_url: str | None = typer.Option(
+        None,
+        "--dingtalk-webhook-url",
+        help="DingTalk custom robot webhook URL. Also reads DINGTALK_WEBHOOK_URL env var.",
+    ),
+    dingtalk_webhook_secret: str | None = typer.Option(
+        None,
+        "--dingtalk-webhook-secret",
+        help="DingTalk webhook signing secret. Also reads DINGTALK_WEBHOOK_SECRET env var.",
+    ),
+    dingtalk_at_mobiles: str | None = typer.Option(
+        None,
+        "--dingtalk-at-mobiles",
+        help="Comma-separated phone numbers to @. Also reads DINGTALK_AT_MOBILES env var.",
+    ),
+    dingtalk_at_all: bool = typer.Option(
+        False,
+        "--dingtalk-at-all/--no-dingtalk-at-all",
+        help="@ everyone in the DingTalk group. Also reads DINGTALK_AT_ALL env var.",
+    ),
 ):
     if clear_checkpoints:
         from tradingagents.graph.checkpointer import clear_all_checkpoints
@@ -1453,6 +1589,10 @@ def analyze(
             "analysts": analysts,
             "auto_save": auto_save,
             "headless": headless,
+            "dingtalk_webhook_url": dingtalk_webhook_url,
+            "dingtalk_webhook_secret": dingtalk_webhook_secret,
+            "dingtalk_at_mobiles": dingtalk_at_mobiles,
+            "dingtalk_at_all": dingtalk_at_all,
         }.items() if v is not None
     }
 
