@@ -361,10 +361,12 @@ if start:
     # Persist the markdown report tree under the project's reports/ dir,
     # matching the CLI's default save location so both interfaces write
     # to the same place.
+    timestamp = _dt.datetime.now().strftime("%H%M%S")
     save_path = (
         Path.cwd()
         / "reports"
-        / f"{ticker_str}_{_dt.datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        / ticker_str
+        / f"{date_str}_{timestamp}"
     )
     try:
         report_root = write_report_tree(final_state, ticker_str, save_path)

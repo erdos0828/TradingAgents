@@ -408,11 +408,13 @@ class TradingAgentsGraph:
         an explicit ``save_path`` or let it default under ``results_dir``.
         """
         if save_path is None:
-            stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            trade_date = str(final_state.get("trade_date", datetime.now().strftime("%Y-%m-%d")))
+            timestamp = datetime.now().strftime("%H%M%S")
             save_path = (
                 Path(self.config["results_dir"])
                 / "reports"
-                / f"{safe_ticker_component(ticker)}_{stamp}"
+                / safe_ticker_component(ticker)
+                / f"{trade_date}_{timestamp}"
             )
         return write_report_tree(final_state, ticker, save_path)
 

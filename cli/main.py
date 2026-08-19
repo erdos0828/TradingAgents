@@ -1,3 +1,4 @@
+# noinspection PyCallingNonCallable
 import base64
 import datetime
 import hashlib
@@ -8,6 +9,7 @@ import sys
 import time
 import urllib.parse
 from collections import deque
+from collections.abc import Callable
 from contextlib import nullcontext
 from functools import wraps
 from pathlib import Path
@@ -1184,10 +1186,7 @@ def run_analysis(
     cli_overrides = cli_overrides or {}
     headless = cli_overrides.get("headless", False)
     auto_save = cli_overrides.get("auto_save", False)
-    dingtalk_webhook_url = cli_overrides.get("dingtalk_webhook_url") or os.environ.get("DINGTALK_WEBHOOK_URL")
-    dingtalk_webhook_secret = cli_overrides.get("dingtalk_webhook_secret") or os.environ.get("DINGTALK_WEBHOOK_SECRET")
-    dingtalk_at_mobiles = cli_overrides.get("dingtalk_at_mobiles") or os.environ.get("DINGTALK_AT_MOBILES", "")
-    dingtalk_at_all = cli_overrides.get("dingtalk_at_all") or os.environ.get("DINGTALK_AT_ALL", "false").lower() in ("1", "true", "yes")
+    send_dingtalk = cli_overrides.get("dingtalk", False)
 
     # First get all user selections (interactive prompts skipped when CLI args provided)
     selections = get_user_selections(cli_overrides)
@@ -1217,18 +1216,25 @@ def run_analysis(
     # Track start time for elapsed display
     start_time = time.time()
 
-    # Create result directory
-    results_dir = Path(config["results_dir"]) / selections["ticker"] / selections["analysis_date"]
-    results_dir.mkdir(parents=True, exist_ok=True)
-    report_dir = results_dir / "reports"
+    # Create report directory (under {results_dir}/reports/)
+    timestamp = datetime.datetime.now().strftime("%H%M%S")
+    report_dir = (
+        Path(config["results_dir"])
+        / "reports"
+        / selections["ticker"]
+        / f"{selections['analysis_date']}_{timestamp}"
+    )
     report_dir.mkdir(parents=True, exist_ok=True)
-    log_file = results_dir / "message_tool.log"
+    # Execution logs live alongside report sections (6_execution/).
+    execution_log_dir = report_dir / "6_execution"
+    execution_log_dir.mkdir(parents=True, exist_ok=True)
+    log_file = execution_log_dir / "message_tool.log"
     log_file.touch(exist_ok=True)
 
-    def save_message_decorator(obj, func_name):
+    def save_message_decorator(obj, func_name: str) -> Callable[..., None]:
         func = getattr(obj, func_name)
         @wraps(func)
-        def wrapper(*args, **kwargs):
+        def wrapper(*args, **kwargs) -> None:
             func(*args, **kwargs)
             timestamp, message_type, content = obj.messages[-1]
             content = content.replace("\n", " ")  # Replace newlines with spaces
@@ -1236,10 +1242,10 @@ def run_analysis(
                 f.write(f"{timestamp} [{message_type}] {content}\n")
         return wrapper
 
-    def save_tool_call_decorator(obj, func_name):
+    def save_tool_call_decorator(obj, func_name: str) -> Callable[..., None]:
         func = getattr(obj, func_name)
         @wraps(func)
-        def wrapper(*args, **kwargs):
+        def wrapper(*args, **kwargs) -> None:
             func(*args, **kwargs)
             timestamp, tool_name, args = obj.tool_calls[-1]
             args_str = ", ".join(f"{k}={v}" for k, v in args.items())
@@ -1247,18 +1253,16 @@ def run_analysis(
                 f.write(f"{timestamp} [Tool Call] {tool_name}({args_str})\n")
         return wrapper
 
-    def save_report_section_decorator(obj, func_name):
+    def save_report_section_decorator(obj, func_name: str) -> Callable[..., None]:
+        """Decorator that only updates in-memory state for display.
+
+        File writing is handled exclusively by save_report_to_disk() via
+        write_report_tree() to avoid duplicate outputs.
+        """
         func = getattr(obj, func_name)
         @wraps(func)
-        def wrapper(section_name, content):
+        def wrapper(section_name, content) -> None:
             func(section_name, content)
-            if section_name in obj.report_sections and obj.report_sections[section_name] is not None:
-                content = obj.report_sections[section_name]
-                if content:
-                    file_name = f"{section_name}.md"
-                    text = "\n".join(str(item) for item in content) if isinstance(content, list) else content
-                    with open(report_dir / file_name, "w", encoding="utf-8") as f:
-                        f.write(text)
         return wrapper
 
     message_buffer.add_message = save_message_decorator(message_buffer, "add_message")
@@ -1457,8 +1461,7 @@ def run_analysis(
         console.print(f"[dim]{analyst_wall_time_tracker.format_summary()}[/dim]")
 
     if auto_save:
-        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        save_path = Path.cwd() / "reports" / f"{selections['ticker']}_{timestamp}"
+        save_path = report_dir
         try:
             report_file = save_report_to_disk(final_state, selections["ticker"], save_path)
             console.print(f"[green]✓ Report auto-saved to:[/green] {save_path.resolve()}")
@@ -1466,23 +1469,30 @@ def run_analysis(
         except Exception as e:
             console.print(f"[red]Error saving report: {e}[/red]")
 
-        # Send DingTalk webhook notification if configured
-        if dingtalk_webhook_url:
+        # Send DingTalk webhook notification if requested
+        if send_dingtalk:
             try:
+                webhook_url = os.environ.get("DINGTALK_WEBHOOK_URL")
+                if not webhook_url:
+                    raise RuntimeError("DINGTALK_WEBHOOK_URL is not set")
+                webhook_secret = os.environ.get("DINGTALK_WEBHOOK_SECRET") or None
+                at_mobiles_raw = os.environ.get("DINGTALK_AT_MOBILES", "")
+                at_mobiles = [m.strip() for m in at_mobiles_raw.split(",") if m.strip()]
+                at_all = os.environ.get("DINGTALK_AT_ALL", "false").lower() in ("1", "true", "yes")
+
                 title, markdown_text = _build_dingtalk_report_message(
                     selections["ticker"],
                     selections["analysis_date"],
                     save_path,
                     final_state,
                 )
-                at_mobiles = [m.strip() for m in dingtalk_at_mobiles.split(",") if m.strip()] if isinstance(dingtalk_at_mobiles, str) else dingtalk_at_mobiles
                 _send_dingtalk_webhook(
-                    dingtalk_webhook_url,
-                    dingtalk_webhook_secret,
+                    webhook_url,
+                    webhook_secret,
                     title,
                     markdown_text,
                     at_mobiles=at_mobiles,
-                    is_at_all=dingtalk_at_all,
+                    is_at_all=at_all,
                 )
                 console.print("[green]✓ DingTalk notification sent.[/green]")
             except Exception as e:
@@ -1491,13 +1501,7 @@ def run_analysis(
         # Prompt to save report
         save_choice = typer.prompt("Save report?", default="Y").strip().upper()
         if save_choice in ("Y", "YES", ""):
-            timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-            default_path = Path.cwd() / "reports" / f"{selections['ticker']}_{timestamp}"
-            save_path_str = typer.prompt(
-                "Save path (press Enter for default)",
-                default=str(default_path)
-            ).strip()
-            save_path = Path(save_path_str)
+            save_path = report_dir
             try:
                 report_file = save_report_to_disk(final_state, selections["ticker"], save_path)
                 console.print(f"\n[green]✓ Report saved to:[/green] {save_path.resolve()}")
@@ -1554,25 +1558,10 @@ def analyze(
         "--headless",
         help="Suppress non-error console output (useful for cronjobs).",
     ),
-    dingtalk_webhook_url: str | None = typer.Option(
-        None,
-        "--dingtalk-webhook-url",
-        help="DingTalk custom robot webhook URL. Also reads DINGTALK_WEBHOOK_URL env var.",
-    ),
-    dingtalk_webhook_secret: str | None = typer.Option(
-        None,
-        "--dingtalk-webhook-secret",
-        help="DingTalk webhook signing secret. Also reads DINGTALK_WEBHOOK_SECRET env var.",
-    ),
-    dingtalk_at_mobiles: str | None = typer.Option(
-        None,
-        "--dingtalk-at-mobiles",
-        help="Comma-separated phone numbers to @. Also reads DINGTALK_AT_MOBILES env var.",
-    ),
-    dingtalk_at_all: bool = typer.Option(
+    dingtalk: bool = typer.Option(
         False,
-        "--dingtalk-at-all/--no-dingtalk-at-all",
-        help="@ everyone in the DingTalk group. Also reads DINGTALK_AT_ALL env var.",
+        "--dingtalk/--no-dingtalk",
+        help="Send a DingTalk notification after the report is saved. Credentials are read from DINGTALK_* env vars.",
     ),
 ):
     if clear_checkpoints:
@@ -1589,10 +1578,7 @@ def analyze(
             "analysts": analysts,
             "auto_save": auto_save,
             "headless": headless,
-            "dingtalk_webhook_url": dingtalk_webhook_url,
-            "dingtalk_webhook_secret": dingtalk_webhook_secret,
-            "dingtalk_at_mobiles": dingtalk_at_mobiles,
-            "dingtalk_at_all": dingtalk_at_all,
+            "dingtalk": dingtalk,
         }.items() if v is not None
     }
 

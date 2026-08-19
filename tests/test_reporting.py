@@ -43,8 +43,12 @@ def test_save_reports_explicit_path(tmp_path):
 
 @pytest.mark.unit
 def test_save_reports_defaults_under_results_dir(tmp_path):
+    state = {**_state(), "trade_date": "2026-08-19"}
     mock_self = SimpleNamespace(config={"results_dir": str(tmp_path)})
-    out = TradingAgentsGraph.save_reports(mock_self, _state(), "AAPL")
+    out = TradingAgentsGraph.save_reports(mock_self, state, "AAPL")
     assert out.exists()
-    assert out.parent.parent.name == "reports"  # results_dir/reports/AAPL_<stamp>/...
-    assert out.parent.name.startswith("AAPL_")
+    # results_dir/reports/AAPL/2026-08-19_HHMMSS/complete_report.md
+    assert out.parent.parent.parent.name == "reports"
+    assert out.parent.parent.name == "AAPL"
+    assert out.parent.name.startswith("2026-08-19_")
+    assert len(out.parent.name) == len("2026-08-19_HHMMSS")

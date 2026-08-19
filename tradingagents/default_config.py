@@ -1,6 +1,9 @@
 import os
 
-_TRADINGAGENTS_HOME = os.path.join(os.path.expanduser("~"), ".tradingagents")
+# TRADINGAGENTS_HOME: base directory for all generated data.
+# - Read from TRADINGAGENTS_HOME env var if set
+# - Default to current working directory (assumed to be project root)
+_TRADINGAGENTS_HOME = os.getenv("TRADINGAGENTS_HOME", os.getcwd())
 
 # Single source of truth for env-var → config-key overrides. To expose
 # a new config key for environment-based override, add a row here — no
@@ -70,7 +73,9 @@ def _apply_env_overrides(config: dict) -> dict:
 
 DEFAULT_CONFIG = _apply_env_overrides({
     "project_dir": os.path.abspath(os.path.join(os.path.dirname(__file__), ".")),
-    "results_dir": os.getenv("TRADINGAGENTS_RESULTS_DIR", os.path.join(_TRADINGAGENTS_HOME, "logs")),
+    # results_dir: base directory for reports and logs.
+    # Default: TRADINGAGENTS_HOME (cwd if not set). Reports go to {results_dir}/reports/
+    "results_dir": os.getenv("TRADINGAGENTS_RESULTS_DIR", _TRADINGAGENTS_HOME),
     "data_cache_dir": os.getenv("TRADINGAGENTS_CACHE_DIR", os.path.join(_TRADINGAGENTS_HOME, "cache")),
     "memory_log_path": os.getenv("TRADINGAGENTS_MEMORY_LOG_PATH", os.path.join(_TRADINGAGENTS_HOME, "memory", "trading_memory.md")),
     # Optional cap on the number of resolved memory log entries. When set,
