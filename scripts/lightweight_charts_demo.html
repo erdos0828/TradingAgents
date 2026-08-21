@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lightweight Charts Demo - K 线与买卖点</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 24px;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: #f5f7fa;
+        }
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+        h1 { font-size: 20px; color: #2c3e50; margin-bottom: 16px; }
+        #chart { background: #fff; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+        .legend {
+            margin-top: 12px;
+            font-size: 13px;
+            color: #5f6368;
+        }
+        .legend span { margin-right: 16px; }
+        .buy { color: #d93025; font-weight: 600; }
+        .sell { color: #188038; font-weight: 600; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Lightweight Charts 测试：K 线 + B/S 买卖点</h1>
+        <div id="chart" style="height: 360px;"></div>
+        <div class="legend">
+            <span class="buy">● B = 买入</span>
+            <span class="sell">● S = 卖出</span>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
+    <script>
+        const chartElement = document.getElementById('chart');
+        const chart = LightweightCharts.createChart(chartElement, {
+            width: chartElement.clientWidth,
+            height: 360,
+            layout: {
+                background: { color: '#ffffff' },
+                textColor: '#2f3542',
+            },
+            grid: {
+                vertLines: { color: '#f1f5f9' },
+                horzLines: { color: '#f1f5f9' },
+            },
+            crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
+            rightPriceScale: { borderColor: '#dfe4ea' },
+            timeScale: { borderColor: '#dfe4ea', timeVisible: false },
+        });
+
+        const candleSeries = chart.addCandlestickSeries({
+            upColor: '#d93025',
+            downColor: '#188038',
+            borderUpColor: '#d93025',
+            borderDownColor: '#188038',
+            wickUpColor: '#d93025',
+            wickDownColor: '#188038',
+        });
+
+        const data = [
+            { time: '2026-07-08', open: 145.0, high: 148.5, low: 144.2, close: 147.8 },
+            { time: '2026-07-09', open: 148.0, high: 149.2, low: 145.5, close: 146.2 },
+            { time: '2026-07-10', open: 146.5, high: 147.8, low: 144.0, close: 145.1 },
+            { time: '2026-07-13', open: 145.2, high: 149.5, low: 144.8, close: 148.9 },
+            { time: '2026-07-14', open: 149.0, high: 152.3, low: 148.5, close: 151.7 },
+            { time: '2026-07-15', open: 152.0, high: 153.8, low: 149.2, close: 150.5 },
+            { time: '2026-07-16', open: 150.8, high: 151.5, low: 148.0, close: 149.3 },
+            { time: '2026-07-17', open: 149.5, high: 150.2, low: 146.8, close: 147.6 },
+            { time: '2026-07-20', open: 147.8, high: 149.0, low: 145.5, close: 146.2 },
+            { time: '2026-07-21', open: 146.5, high: 148.8, low: 145.0, close: 148.2 },
+            { time: '2026-07-22', open: 148.5, high: 150.5, low: 147.2, close: 149.8 },
+            { time: '2026-07-23', open: 150.0, high: 151.2, low: 148.5, close: 150.8 },
+            { time: '2026-07-24', open: 150.5, high: 151.0, low: 148.0, close: 148.7 },
+            { time: '2026-07-27', open: 148.5, high: 149.2, low: 145.8, close: 146.5 },
+            { time: '2026-07-28', open: 146.8, high: 148.5, low: 145.2, close: 147.9 },
+            { time: '2026-07-29', open: 148.0, high: 150.5, low: 147.5, close: 149.6 },
+            { time: '2026-07-30', open: 149.8, high: 151.2, low: 148.5, close: 150.7 },
+            { time: '2026-07-31', open: 150.9, high: 153.5, low: 150.2, close: 152.8 },
+            { time: '2026-08-03', open: 153.0, high: 156.8, low: 152.5, close: 155.5 },
+            { time: '2026-08-04', open: 155.8, high: 157.2, low: 153.0, close: 154.2 },
+            { time: '2026-08-05', open: 154.5, high: 156.0, low: 152.8, close: 155.8 },
+            { time: '2026-08-06', open: 156.0, high: 158.5, low: 155.2, close: 157.6 },
+            { time: '2026-08-07', open: 157.8, high: 159.2, low: 156.5, close: 158.4 },
+            { time: '2026-08-10', open: 158.5, high: 160.8, low: 157.8, close: 160.2 },
+            { time: '2026-08-11', open: 160.5, high: 162.3, low: 159.0, close: 161.5 },
+            { time: '2026-08-12', open: 161.8, high: 163.0, low: 160.2, close: 162.4 },
+            { time: '2026-08-13', open: 162.5, high: 164.2, low: 161.8, close: 163.8 },
+            { time: '2026-08-14', open: 163.9, high: 165.5, low: 162.5, close: 164.9 },
+            { time: '2026-08-17', open: 165.2, high: 166.8, low: 164.0, close: 165.5 },
+            { time: '2026-08-18', open: 165.8, high: 167.2, low: 164.5, close: 166.8 },
+            { time: '2026-08-19', open: 166.9, high: 168.5, low: 165.8, close: 167.5 },
+            { time: '2026-08-20', open: 167.6, high: 169.2, low: 166.5, close: 168.8 },
+        ];
+        candleSeries.setData(data);
+
+        // Simulated trade markers
+        candleSeries.setMarkers([
+            { time: '2026-07-13', position: 'belowBar', color: '#d93025', shape: 'arrowUp', text: 'B', size: 2 },
+            { time: '2026-07-22', position: 'aboveBar', color: '#188038', shape: 'arrowDown', text: 'S', size: 2 },
+            { time: '2026-08-05', position: 'belowBar', color: '#d93025', shape: 'arrowUp', text: 'B', size: 2 },
+            { time: '2026-08-14', position: 'aboveBar', color: '#188038', shape: 'arrowDown', text: 'S', size: 2 },
+        ]);
+
+        chart.timeScale().fitContent();
+
+        window.addEventListener('resize', () => {
+            chart.applyOptions({ width: chartElement.clientWidth });
+        });
+    </script>
+</body>
+</html>

@@ -293,11 +293,45 @@ INDEX_HTML = """<!DOCTYPE html>
                 reportsData = await res.json();
                 console.log('Loaded reports:', reportsData);
                 populateTickers();
+                applyHashSelection();
             } catch (e) {
                 console.error('init failed:', e);
                 const msg = `加载报告列表失败: ${e.message}`;
                 $('content').innerHTML = `<div class="empty">${msg}</div>`;
                 $('dateList').innerHTML = `<div class="empty" style="color:#f87171">${msg}</div>`;
+            }
+        }
+
+        function applyHashSelection() {
+            const hash = window.location.hash.slice(1);
+            if (!hash) return;
+            const params = new URLSearchParams(hash);
+            const ticker = params.get('ticker');
+            let date = params.get('date');
+            if (!ticker || !date) return;
+            if (!reportsData.tickers[ticker]) return;
+
+            const select = $('tickerSelect');
+            select.value = ticker;
+            currentTicker = ticker;
+            renderDates();
+
+            const dateItems = Array.from(document.querySelectorAll('.date-item'));
+            let matched = dateItems.find(item => {
+                const label = item.querySelector('.date-label')?.textContent || '';
+                return label === date;
+            });
+            if (!matched) {
+                matched = dateItems.find(item => {
+                    const label = item.querySelector('.date-label')?.textContent || '';
+                    return label.startsWith(date);
+                });
+            }
+            if (matched) {
+                const label = matched.querySelector('.date-label').textContent;
+                selectDate(label, matched);
+            } else {
+                clearReport();
             }
         }
 
