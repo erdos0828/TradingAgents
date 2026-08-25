@@ -5,6 +5,7 @@ import hashlib
 import hmac
 import json
 import os
+import subprocess
 import sys
 import time
 import urllib.parse
@@ -1595,6 +1596,88 @@ def analyze(
             err=True,
         )
         raise typer.Exit(code=1) from None
+
+
+@app.command(name="serve")
+def serve(
+    host: str = typer.Option("127.0.0.1", "--host", "-h", help="Bind host"),
+    port: int = typer.Option(5000, "--port", "-p", help="Bind port"),
+    holdings: str | None = typer.Option(None, "--holdings", help="Path to portfolio holdings JSON"),
+    reports_dir: str | None = typer.Option(None, "--reports-dir", help="Path to reports directory"),
+    cache_dir: str | None = typer.Option(None, "--cache-dir", help="Path to cache directory"),
+    report_server_url: str | None = typer.Option(
+        None, "--report-server-url", help="Base URL of the report server for detail links"
+    ),
+):
+    """Start the portfolio summary web server."""
+    project_root = Path(__file__).resolve().parent.parent
+    env = os.environ.copy()
+    env["PYTHONPATH"] = f"{project_root}{os.pathsep}{env.get('PYTHONPATH', '')}"
+    cmd = [
+        sys.executable,
+        "-m",
+        "scripts.portfolio_summary_server",
+        "--host",
+        host,
+        "--port",
+        str(port),
+    ]
+    if holdings:
+        cmd.extend(["--holdings", holdings])
+    if reports_dir:
+        cmd.extend(["--reports-dir", reports_dir])
+    if cache_dir:
+        cmd.extend(["--cache-dir", cache_dir])
+    if report_server_url:
+        cmd.extend(["--report-server-url", report_server_url])
+    try:
+        subprocess.run(cmd, cwd=project_root, check=True, env=env)
+    except KeyboardInterrupt:
+        console.print("[yellow]Server stopped.[/yellow]")
+    except subprocess.CalledProcessError as e:
+        console.print(f"[red]Server exited with code {e.returncode}.[/red]")
+        raise typer.Exit(code=e.returncode) from e
+
+
+@app.command(name="analyze-portfolio")
+def analyze_portfolio(
+    date: str | None = typer.Option(
+        None, "--date", "-d", help="Analysis date in YYYY-MM-DD format (default: today)"
+    ),
+    analysts: str = typer.Option(
+        "market,news,fundamentals", "--analysts", "-a", help="Comma-separated analysts"
+    ),
+    no_dingtalk: bool = typer.Option(False, "--no-dingtalk", help="Disable DingTalk notification"),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Show commands without executing"),
+    holdings: str = typer.Option(
+        "data/portfolio_holdings.json", "--holdings", help="Path to holdings JSON file"
+    ),
+    skip: str | None = typer.Option(
+        None, "--skip", help="Comma-separated list of tickers to skip"
+    ),
+):
+    """Batch analyze all stocks in portfolio holdings."""
+    project_root = Path(__file__).resolve().parent.parent
+    env = os.environ.copy()
+    env["PYTHONPATH"] = f"{project_root}{os.pathsep}{env.get('PYTHONPATH', '')}"
+    cmd = [sys.executable, "-m", "scripts.analyze_portfolio"]
+    if date:
+        cmd.extend(["--date", date])
+    cmd.extend(["--analysts", analysts])
+    if no_dingtalk:
+        cmd.append("--no-dingtalk")
+    if dry_run:
+        cmd.append("--dry-run")
+    cmd.extend(["--holdings", holdings])
+    if skip:
+        cmd.extend(["--skip", skip])
+    try:
+        subprocess.run(cmd, cwd=project_root, check=True, env=env)
+    except KeyboardInterrupt:
+        console.print("[yellow]Batch analysis interrupted.[/yellow]")
+    except subprocess.CalledProcessError as e:
+        console.print(f"[red]Batch analysis exited with code {e.returncode}.[/red]")
+        raise typer.Exit(code=e.returncode) from e
 
 
 if __name__ == "__main__":

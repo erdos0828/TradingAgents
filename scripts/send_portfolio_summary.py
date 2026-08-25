@@ -290,11 +290,13 @@ def _build_lightweight_chart(
     ticker: str,
     trades: dict[str, dict] | None = None,
     height: int = 360,
+    cost_price: float | None = None,
 ) -> str:
     """Build a TradingView lightweight-charts candlestick chart with B/S markers.
 
     Uses the built-in series.setMarkers() for B/S markers. Tooltips are shown
     via the crosshair move event when the cursor hovers a trading day.
+    An optional dashed horizontal line marks the user's average cost price.
     """
     if df is None or df.empty:
         return ""
@@ -336,6 +338,13 @@ def _build_lightweight_chart(
 
     markers.sort(key=lambda m: m["time"])
 
+    has_cost = (
+        cost_price is not None
+        and isinstance(cost_price, (int, float))
+        and not math.isnan(cost_price)
+        and cost_price > 0
+    )
+
     container_id = "chart-" + re.sub(r"[^a-zA-Z0-9]", "_", ticker)
     candles_json = json.dumps(candles, ensure_ascii=False)
     markers_json = json.dumps(markers, ensure_ascii=False)
@@ -373,7 +382,8 @@ def _build_lightweight_chart(
         '    });\n'
         '    series.setData(' + candles_json + ');\n'
         '    series.setMarkers(' + markers_json + ');\n'
-        '    function setDefaultRange() {\n'
+        + ('    series.createPriceLine({ price: ' + str(float(cost_price)) + ', color: "#2563eb", lineWidth: 2, lineStyle: LightweightCharts.LineStyle.Dashed, axisLabelVisible: true, title: "成本" });\n' if has_cost else '')
+        + '    function setDefaultRange() {\n'
         '        var data = ' + candles_json + ';\n'
         '        if (!data.length) return;\n'
         '        var last = data[data.length - 1].time;\n'
@@ -507,6 +517,7 @@ def _build_cards_html(
     cards = []
     for _, row in df.iterrows():
         ticker = html.escape(str(row["Ticker"]))
+        name = html.escape(str(row.get("名称", ticker)))
         report_dir = html.escape(str(row["报告目录"]))
         rating = html.escape(str(row["最新评级"]))
         rating_cls = _rating_class(rating)
@@ -544,7 +555,7 @@ def _build_cards_html(
         # Candlestick chart with trade markers (show all available cache history)
         history = _get_price_history(ticker, cache_dir, target_date, days=None)
         ticker_trades = _aggregate_trades(transactions.get(ticker, [])) if transactions else {}
-        candlestick_html = _build_lightweight_chart(history, ticker, ticker_trades) if history is not None else ""
+        candlestick_html = _build_lightweight_chart(history, ticker, ticker_trades, cost_price=row["成本价"]) if history is not None else ""
 
         report_link = ""
         if report_server_url:
@@ -554,7 +565,10 @@ def _build_cards_html(
         <div class="holding-card">
             <div class="card-header">
                 <div class="ticker-block">
-                    <div class="ticker-name">{ticker}</div>
+                    <div class="ticker-name-block">
+                        <div class="ticker-name">{name}</div>
+                        <div class="ticker-code">{ticker}</div>
+                    </div>
                     <span class="rating-tag {rating_cls}">{rating}</span>
                 </div>
                 <div class="header-right">
@@ -658,10 +672,21 @@ def _base_styles() -> str:
             gap: 12px;
             flex-shrink: 0;
         }
+        .ticker-name-block {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
         .ticker-name {
             font-size: 22px;
             font-weight: 700;
             color: var(--primary);
+            line-height: 1.2;
+        }
+        .ticker-code {
+            font-size: 13px;
+            color: var(--muted);
+            font-weight: 500;
         }
         .rating-tag {
             display: inline-block;
@@ -981,6 +1006,7 @@ def build_summary_data(
 
     for h in holdings:
         ticker = h["ticker"]
+        name = h.get("name", ticker)
         qty = float(h.get("quantity", 0))
         cost_price = float(h.get("cost_price", 0))
 
@@ -1044,6 +1070,7 @@ def build_summary_data(
 
         rows.append({
             "Ticker": ticker,
+            "名称": name,
             "最新评级": latest_rating,
             "Executive Summary": executive_summary,
             "Investment Thesis": investment_thesis,
@@ -1065,7 +1092,7 @@ def build_summary_data(
 
     df = pd.DataFrame(rows)
     column_order = [
-        "Ticker", "最新评级", "Executive Summary", "Investment Thesis",
+        "Ticker", "名称", "最新评级", "Executive Summary", "Investment Thesis",
         "过去评级", "成本价", "最新价", "股数", "市值",
         "当日盈亏", "当日盈亏率", "总收益", "收益率", "报告日期", "报告目录"
     ]

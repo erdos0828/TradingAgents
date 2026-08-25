@@ -1,0 +1,66 @@
+{
+  "description": "保证金综合账户证券持仓",
+  "extracted_at": "2026-08-19",
+  "holdings": [
+     {
+      "ticker": "600006.SS",
+      "name": "东风股份",
+      "quantity": 42300,
+      "cost_price": 7.2207
+    },
+    {
+      "ticker": "002352.SZ",
+      "name": "顺丰控股",
+      "quantity": 1300,
+      "cost_price": 41.2921
+    },
+    {
+      "ticker": "600036.SS",
+      "name": "招商银行",
+      "quantity": 700,
+      "cost_price": 35.1053
+    },
+    {
+      "ticker": "AAPL",
+      "name": "Apple",
+      "quantity": 204,
+      "cost_price": 228.463
+    },
+    {
+      "ticker": "BABA",
+      "name": "阿里巴巴",
+      "quantity": 6582,
+      "cost_price": 111.292
+    },
+    {
+      "ticker": "CRML",
+      "name": "Critical Metals",
+      "quantity": 3000,
+      "cost_price": 10.009
+    },
+    {
+      "ticker": "INTC",
+      "name": "Intel",
+      "quantity": 597,
+      "cost_price": -19.6707
+    },
+    {
+      "ticker": "MSFT",
+      "name": "Microsoft",
+      "quantity": 200,
+      "cost_price": 463.917
+    },
+    {
+      "ticker": "TSLA",
+      "name": "Tesla",
+      "quantity": 196,
+      "cost_price": 426.008
+    },
+    {
+      "ticker": "UNH",
+      "name": "UnitedHealth",
+      "quantity": 149,
+      "cost_price": 154.514
+    }
+  ]
+}

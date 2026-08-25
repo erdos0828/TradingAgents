@@ -1,0 +1,1322 @@
+[
+  {
+    "ticker": "MSFT",
+    "name": "微软",
+    "side": "sell",
+    "date": "2026-08-11",
+    "time": "2026/08/11 09:34:21 (美东)",
+    "quantity": 70.0,
+    "price": 502.04,
+    "amount": 35142.8
+  },
+  {
+    "ticker": "UNH",
+    "name": "联合健康",
+    "side": "sell",
+    "date": "2026-08-04",
+    "time": "2026/08/04 11:06:17 (美东)",
+    "quantity": 60.0,
+    "price": 408.25,
+    "amount": 24495.0
+  },
+  {
+    "ticker": "CRML",
+    "name": "Critical Metals",
+    "side": "buy",
+    "date": "2026-05-20",
+    "time": "2026/05/20 10:03:47 (美东)",
+    "quantity": 90.0,
+    "price": 10.09,
+    "amount": 908.1
+  },
+  {
+    "ticker": "INTC",
+    "name": "英特尔",
+    "side": "buy",
+    "date": "2026-05-20",
+    "time": "2026/05/20 09:31:46 (美东)",
+    "quantity": 109.0,
+    "price": 118.74,
+    "amount": 12942.66
+  },
+  {
+    "ticker": "AAPL",
+    "name": "苹果",
+    "side": "sell",
+    "date": "2026-05-18",
+    "time": "2026/05/18 12:59:50 (美东)",
+    "quantity": 27.0,
+    "price": 295.905,
+    "amount": 7989.44
+  },
+  {
+    "ticker": "UNH",
+    "name": "联合健康",
+    "side": "sell",
+    "date": "2026-05-18",
+    "time": "2026/05/18 10:16:55 (美东)",
+    "quantity": 46.0,
+    "price": 385.31,
+    "amount": 17724.26
+  },
+  {
+    "ticker": "INTC",
+    "name": "英特尔",
+    "side": "sell",
+    "date": "2026-05-12",
+    "time": "2026/05/12 10:18:19 (美东)",
+    "quantity": 52.0,
+    "price": 122.9,
+    "amount": 6390.8
+  },
+  {
+    "ticker": "CRML",
+    "name": "Critical Metals",
+    "side": "sell",
+    "date": "2026-05-07",
+    "time": "2026/05/07 09:44:34 (美东)",
+    "quantity": 7.0,
+    "price": 13.2,
+    "amount": 92.4
+  },
+  {
+    "ticker": "INTC",
+    "name": "英特尔",
+    "side": "sell",
+    "date": "2026-05-07",
+    "time": "2026/05/07 09:42:19 (美东)",
+    "quantity": 90.0,
+    "price": 110.49,
+    "amount": 9944.1
+  },
+  {
+    "ticker": "INTC",
+    "name": "英特尔",
+    "side": "sell",
+    "date": "2026-05-04",
+    "time": "2026/05/04 15:35:47 (美东)",
+    "quantity": 114.0,
+    "price": 96.4,
+    "amount": 10989.6
+  },
+  {
+    "ticker": "INTC",
+    "name": "英特尔",
+    "side": "sell",
+    "date": "2026-04-28",
+    "time": "2026/04/28 09:34:09 (美东)",
+    "quantity": 232.0,
+    "price": 81.0,
+    "amount": 18792.0
+  },
+  {
+    "ticker": "MSFT",
+    "name": "微软",
+    "side": "sell",
+    "date": "2026-04-23",
+    "time": "2026/04/23 09:57:11 (美东)",
+    "quantity": 80.0,
+    "price": 418.76,
+    "amount": 33500.8
+  },
+  {
+    "ticker": "BABA",
+    "name": "阿里巴巴",
+    "side": "sell",
+    "date": "2026-04-21",
+    "time": "2026/04/21 10:17:01 (美东)",
+    "quantity": 178.0,
+    "price": 137.77,
+    "amount": 24523.06
+  },
+  {
+    "ticker": "INTC",
+    "name": "英特尔",
+    "side": "sell",
+    "date": "2026-04-14",
+    "time": "2026/04/14 11:43:37 (美东)",
+    "quantity": 224.0,
+    "price": 62.4701,
+    "amount": 13993.3
+  },
+  {
+    "ticker": "AAPL",
+    "name": "苹果",
+    "side": "sell",
+    "date": "2026-04-06",
+    "time": "2026/04/06 10:10:15 (美东)",
+    "quantity": 20.0,
+    "price": 259.68,
+    "amount": 5193.6
+  },
+  {
+    "ticker": "CRML",
+    "name": "Critical Metals",
+    "side": "sell",
+    "date": "2026-04-02",
+    "time": "2026/04/02 09:41:28 (美东)",
+    "quantity": 500.0,
+    "price": 7.9732,
+    "amount": 3986.6
+  },
+  {
+    "ticker": "CRML",
+    "name": "Critical Metals",
+    "side": "buy",
+    "date": "2026-03-20",
+    "time": "2026/03/20 11:12:40 (美东)",
+    "quantity": 500.0,
+    "price": 7.92,
+    "amount": 3960.0
+  },
+  {
+    "ticker": "BABA",
+    "name": "阿里巴巴",
+    "side": "buy",
+    "date": "2026-03-19",
+    "time": "2026/03/19 09:36:47 (美东)",
+    "quantity": 300.0,
+    "price": 121.45,
+    "amount": 36435.0
+  },
+  {
+    "ticker": "AAPL",
+    "name": "苹果",
+    "side": "buy",
+    "date": "2026-03-13",
+    "time": "2026/03/13 10:04:10 (美东)",
+    "quantity": 70.0,
+    "price": 255.52,
+    "amount": 17886.4
+  },
+  {
+    "ticker": "BABA",
+    "name": "阿里巴巴",
+    "side": "buy",
+    "date": "2026-03-10",
+    "time": "2026/03/10 10:44:53 (美东)",
+    "quantity": 300.0,
+    "price": 137.43,
+    "amount": 41229.0
+  },
+  {
+    "ticker": "CRML",
+    "name": "Critical Metals",
+    "side": "buy",
+    "date": "2026-03-06",
+    "time": "2026/03/06 10:20:47 (美东)",
+    "quantity": 500.0,
+    "price": 9.76,
+    "amount": 4880.0
+  },
+  {
+    "ticker": "BABA",
+    "name": "阿里巴巴",
+    "side": "buy",
+    "date": "2026-02-26",
+    "time": "2026/02/26 14:30:25 (美东)",
+    "quantity": 300.0,
+    "price": 146.9,
+    "amount": 44070.0
+  },
+  {
+    "ticker": "TSLA",
+    "name": "特斯拉",
+    "side": "buy",
+    "date": "2026-02-25",
+    "time": "2026/02/25 12:48:41 (美东)",
+    "quantity": 50.0,
+    "price": 414.8562,
+    "amount": 20742.81
+  },
+  {
+    "ticker": "CRML",
+    "name": "Critical Metals",
+    "side": "buy",
+    "date": "2026-02-25",
+    "time": "2026/02/25 11:11:04 (美东)",
+    "quantity": 480.0,
+    "price": 11.13,
+    "amount": 5342.4
+  },
+  {
+    "ticker": "MSFT",
+    "name": "微软",
+    "side": "buy",
+    "date": "2026-02-23",
+    "time": "2026/02/23 09:51:27 (美东)",
+    "quantity": 40.0,
+    "price": 388.44,
+    "amount": 15537.6
+  },
+  {
+    "ticker": "CRML",
+    "name": "Critical Metals",
+    "side": "buy",
+    "date": "2026-02-06",
+    "time": "2026/02/06 10:41:57 (美东)",
+    "quantity": 90.0,
+    "price": 10.87,
+    "amount": 978.3
+  },
+  {
+    "ticker": "UNH",
+    "name": "联合健康",
+    "side": "buy",
+    "date": "2026-02-05",
+    "time": "2026/02/05 11:10:00 (美东)",
+    "quantity": 50.0,
+    "price": 269.845,
+    "amount": 13492.25
+  },
+  {
+    "ticker": "AAPL",
+    "name": "苹果",
+    "side": "sell",
+    "date": "2026-02-05",
+    "time": "2026/02/05 11:08:46 (美东)",
+    "quantity": 200.0,
+    "price": 273.6415,
+    "amount": 54728.3
+  },
+  {
+    "ticker": "MSFT",
+    "name": "微软",
+    "side": "buy",
+    "date": "2026-02-04",
+    "time": "2026/02/04 09:55:35 (美东)",
+    "quantity": 10.0,
+    "price": 410.0,
+    "amount": 4100.0
+  },
+  {
+    "ticker": "MSFT",
+    "name": "微软",
+    "side": "buy",
+    "date": "2026-01-29",
+    "time": "2026/01/29 09:33:09 (美东)",
+    "quantity": 40.0,
+    "price": 432.3697,
+    "amount": 17294.79
+  },
+  {
+    "ticker": "UNH",
+    "name": "联合健康",
+    "side": "buy",
+    "date": "2026-01-28",
+    "time": "2026/01/28 11:26:18 (美东)",
+    "quantity": 50.0,
+    "price": 293.77,
+    "amount": 14688.5
+  },
+  {
+    "ticker": "AAPL",
+    "name": "苹果",
+    "side": "buy",
+    "date": "2026-01-28",
+    "time": "2026/01/28 10:39:26 (美东)",
+    "quantity": 70.0,
+    "price": 256.565,
+    "amount": 17959.55
+  },
+  {
+    "ticker": "UNH",
+    "name": "联合健康",
+    "side": "buy",
+    "date": "2026-01-27",
+    "time": "2026/01/27 10:01:51 (美东)",
+    "quantity": 50.0,
+    "price": 283.18,
+    "amount": 14159.0
+  },
+  {
+    "ticker": "INTC",
+    "name": "英特尔",
+    "side": "sell",
+    "date": "2026-01-23",
+    "time": "2026/01/23 09:33:36 (美东)",
+    "quantity": 800.0,
+    "price": 46.28,
+    "amount": 37024.0
+  },
+  {
+    "ticker": "CRML",
+    "name": "Critical Metals",
+    "side": "buy",
+    "date": "2026-01-22",
+    "time": "2026/01/22 10:08:45 (美东)",
+    "quantity": 500.0,
+    "price": 17.32,
+    "amount": 8660.0
+  },
+  {
+    "ticker": "MSFT",
+    "name": "微软",
+    "side": "buy",
+    "date": "2026-01-20",
+    "time": "2026/01/20 09:39:17 (美东)",
+    "quantity": 40.0,
+    "price": 452.9194,
+    "amount": 18116.78
+  },
+  {
+    "ticker": "BABA",
+    "name": "阿里巴巴",
+    "side": "sell",
+    "date": "2026-01-16",
+    "time": "2026/01/16 09:36:24 (美东)",
+    "quantity": 980.0,
+    "price": 167.9,
+    "amount": 164542.0
+  },
+  {
+    "ticker": "AAPL",
+    "name": "苹果",
+    "side": "buy",
+    "date": "2026-01-12",
+    "time": "2026/01/12 10:28:11 (美东)",
+    "quantity": 46.0,
+    "price": 261.18,
+    "amount": 12014.28
+  },
+  {
+    "ticker": "BABA",
+    "name": "阿里巴巴",
+    "side": "buy",
+    "date": "2026-01-12",
+    "time": "2026/01/12 10:25:50 (美东)",
+    "quantity": 200.0,
+    "price": 165.08,
+    "amount": 33016.0
+  },
+  {
+    "ticker": "CRML",
+    "name": "Critical Metals",
+    "side": "sell",
+    "date": "2026-01-12",
+    "time": "2026/01/12 10:19:49 (美东)",
+    "quantity": 500.0,
+    "price": 14.25,
+    "amount": 7125.0
+  },
+  {
+    "ticker": "UNH",
+    "name": "联合健康",
+    "side": "sell",
+    "date": "2026-01-12",
+    "time": "2026/01/12 10:19:04 (美东)",
+    "quantity": 100.0,
+    "price": 336.49,
+    "amount": 33649.0
+  },
+  {
+    "ticker": "CRML",
+    "name": "Critical Metals",
+    "side": "sell",
+    "date": "2026-01-06",
+    "time": "2026/01/06 13:50:54 (美东)",
+    "quantity": 500.0,
+    "price": 10.72,
+    "amount": 5360.0
+  },
+  {
+    "ticker": "BABA",
+    "name": "阿里巴巴",
+    "side": "buy",
+    "date": "2025-12-30",
+    "time": "2025/12/30 11:55:39 (美东)",
+    "quantity": 300.0,
+    "price": 148.09,
+    "amount": 44427.0
+  },
+  {
+    "ticker": "CRML",
+    "name": "Critical Metals",
+    "side": "buy",
+    "date": "2025-12-22",
+    "time": "2025/12/22 10:46:33 (美东)",
+    "quantity": 500.0,
+    "price": 8.1297,
+    "amount": 4064.85
+  },
+  {
+    "ticker": "AAPL",
+    "name": "苹果",
+    "side": "buy",
+    "date": "2025-12-09",
+    "time": "2025/12/09 09:35:57 (美东)",
+    "quantity": 50.0,
+    "price": 278.8386,
+    "amount": 13941.93
+  },
+  {
+    "ticker": "UNH",
+    "name": "联合健康",
+    "side": "buy",
+    "date": "2025-12-02",
+    "time": "2025/12/02 10:16:18 (美东)",
+    "quantity": 50.0,
+    "price": 327.11,
+    "amount": 16355.5
+  },
+  {
+    "ticker": "MSFT",
+    "name": "微软",
+    "side": "buy",
+    "date": "2025-11-24",
+    "time": "2025/11/24 09:40:51 (美东)",
+    "quantity": 40.0,
+    "price": 473.86,
+    "amount": 18954.4
+  },
+  {
+    "ticker": "UNH",
+    "name": "联合健康",
+    "side": "buy",
+    "date": "2025-11-20",
+    "time": "2025/11/20 10:07:06 (美东)",
+    "quantity": 50.0,
+    "price": 310.66,
+    "amount": 15533.0
+  },
+  {
+    "ticker": "MSFT",
+    "name": "微软",
+    "side": "buy",
+    "date": "2025-11-20",
+    "time": "2025/11/20 10:05:26 (美东)",
+    "quantity": 50.0,
+    "price": 492.82,
+    "amount": 24641.0
+  },
+  {
+    "ticker": "TSLA",
+    "name": "特斯拉",
+    "side": "buy",
+    "date": "2025-11-19",
+    "time": "2025/11/19 10:01:27 (美东)",
+    "quantity": 10.0,
+    "price": 409.13,
+    "amount": 4091.3
+  },
+  {
+    "ticker": "CRML",
+    "name": "Critical Metals",
+    "side": "buy",
+    "date": "2025-10-30",
+    "time": "2025/10/30 09:35:23 (美东)",
+    "quantity": 1000.0,
+    "price": 12.0,
+    "amount": 12000.0
+  },
+  {
+    "ticker": "BABA",
+    "name": "阿里巴巴",
+    "side": "buy",
+    "date": "2025-10-30",
+    "time": "2025/10/30 09:32:24 (美东)",
+    "quantity": 275.0,
+    "price": 175.33,
+    "amount": 48215.75
+  },
+  {
+    "ticker": "INTC",
+    "name": "英特尔",
+    "side": "buy",
+    "date": "2025-10-28",
+    "time": "2025/10/28 09:35:54 (美东)",
+    "quantity": 700.0,
+    "price": 40.4096,
+    "amount": 28286.72
+  },
+  {
+    "ticker": "TSLA",
+    "name": "特斯拉",
+    "side": "sell",
+    "date": "2025-10-24",
+    "time": "2025/10/24 10:01:49 (美东)",
+    "quantity": 100.0,
+    "price": 441.0,
+    "amount": 44100.0
+  },
+  {
+    "ticker": "MSFT",
+    "name": "微软",
+    "side": "buy",
+    "date": "2025-10-20",
+    "time": "2025/10/20 09:51:45 (美东)",
+    "quantity": 50.0,
+    "price": 514.81,
+    "amount": 25740.5
+  },
+  {
+    "ticker": "CRML",
+    "name": "Critical Metals",
+    "side": "sell",
+    "date": "2025-10-17",
+    "time": "2025/10/17 13:28:25 (美东)",
+    "quantity": 2798.0,
+    "price": 19.03,
+    "amount": 53245.94
+  },
+  {
+    "ticker": "CRML",
+    "name": "Critical Metals",
+    "side": "buy",
+    "date": "2025-10-16",
+    "time": "2025/10/16 09:46:38 (美东)",
+    "quantity": 561.0,
+    "price": 23.24,
+    "amount": 13037.64
+  },
+  {
+    "ticker": "CRML",
+    "name": "Critical Metals",
+    "side": "sell",
+    "date": "2025-10-15",
+    "time": "2025/10/15 09:33:19 (美东)",
+    "quantity": 1157.0,
+    "price": 26.42,
+    "amount": 30567.94
+  },
+  {
+    "ticker": "UNH",
+    "name": "联合健康",
+    "side": "sell",
+    "date": "2025-10-14",
+    "time": "2025/10/14 09:39:15 (美东)",
+    "quantity": 100.0,
+    "price": 354.11,
+    "amount": 35411.0
+  },
+  {
+    "ticker": "CRML",
+    "name": "Critical Metals",
+    "side": "buy",
+    "date": "2025-10-13",
+    "time": "2025/10/13 10:03:20 (美东)",
+    "quantity": 978.0,
+    "price": 20.07,
+    "amount": 19628.46
+  },
+  {
+    "ticker": "BABA",
+    "name": "阿里巴巴",
+    "side": "buy",
+    "date": "2025-10-13",
+    "time": "2025/10/13 09:59:40 (美东)",
+    "quantity": 998.0,
+    "price": 168.36,
+    "amount": 168023.28
+  },
+  {
+    "ticker": "BABA",
+    "name": "阿里巴巴",
+    "side": "buy",
+    "date": "2025-10-13",
+    "time": "2025/10/13 09:58:24 (美东)",
+    "quantity": 109.0,
+    "price": 167.87,
+    "amount": 18297.83
+  },
+  {
+    "ticker": "BABA",
+    "name": "阿里巴巴",
+    "side": "buy",
+    "date": "2025-10-13",
+    "time": "2025/10/13 09:34:22 (美东)",
+    "quantity": 1000.0,
+    "price": 166.7283,
+    "amount": 166728.3
+  },
+  {
+    "ticker": "CRML",
+    "name": "Critical Metals",
+    "side": "buy",
+    "date": "2025-10-10",
+    "time": "2025/10/10 11:25:13 (美东)",
+    "quantity": 800.0,
+    "price": 17.89,
+    "amount": 14312.0
+  },
+  {
+    "ticker": "CRML",
+    "name": "Critical Metals",
+    "side": "buy",
+    "date": "2025-10-10",
+    "time": "2025/10/10 11:22:53 (美东)",
+    "quantity": 940.0,
+    "price": 17.88,
+    "amount": 16807.2
+  },
+  {
+    "ticker": "BABA",
+    "name": "阿里巴巴",
+    "side": "sell",
+    "date": "2025-10-10",
+    "time": "2025/10/10 11:20:49 (美东)",
+    "quantity": 525.0,
+    "price": 163.42,
+    "amount": 85795.5
+  },
+  {
+    "ticker": "BABA",
+    "name": "阿里巴巴",
+    "side": "sell",
+    "date": "2025-10-10",
+    "time": "2025/10/10 11:18:02 (美东)",
+    "quantity": 802.0,
+    "price": 164.82,
+    "amount": 132185.64
+  },
+  {
+    "ticker": "UNH",
+    "name": "联合健康",
+    "side": "buy",
+    "date": "2025-10-07",
+    "time": "2025/10/07 09:38:39 (美东)",
+    "quantity": 70.0,
+    "price": 361.87,
+    "amount": 25330.9
+  },
+  {
+    "ticker": "AAPL",
+    "name": "苹果",
+    "side": "buy",
+    "date": "2025-10-07",
+    "time": "2025/10/07 09:36:58 (美东)",
+    "quantity": 100.0,
+    "price": 256.92,
+    "amount": 25692.0
+  },
+  {
+    "ticker": "TSLA",
+    "name": "特斯拉",
+    "side": "sell",
+    "date": "2025-10-03",
+    "time": "2025/10/03 12:48:13 (美东)",
+    "quantity": 100.0,
+    "price": 426.03,
+    "amount": 42603.0
+  },
+  {
+    "ticker": "INTC",
+    "name": "英特尔",
+    "side": "buy",
+    "date": "2025-09-29",
+    "time": "2025/09/29 09:40:23 (美东)",
+    "quantity": 1220.0,
+    "price": 33.97,
+    "amount": 41443.4
+  },
+  {
+    "ticker": "BABA",
+    "name": "阿里巴巴",
+    "side": "buy",
+    "date": "2025-09-24",
+    "time": "2025/09/24 09:34:38 (美东)",
+    "quantity": 299.0,
+    "price": 176.74,
+    "amount": 52845.26
+  },
+  {
+    "ticker": "TSLA",
+    "name": "特斯拉",
+    "side": "sell",
+    "date": "2025-09-23",
+    "time": "2025/09/23 09:42:06 (美东)",
+    "quantity": 300.0,
+    "price": 435.0,
+    "amount": 130500.0
+  },
+  {
+    "ticker": "INTC",
+    "name": "英特尔",
+    "side": "sell",
+    "date": "2025-09-19",
+    "time": "2025/09/19 09:51:04 (美东)",
+    "quantity": 1300.0,
+    "price": 29.51,
+    "amount": 38363.0
+  },
+  {
+    "ticker": "MSFT",
+    "name": "微软",
+    "side": "buy",
+    "date": "2025-09-18",
+    "time": "2025/09/18 10:36:44 (美东)",
+    "quantity": 20.0,
+    "price": 512.56,
+    "amount": 10251.2
+  },
+  {
+    "ticker": "UNH",
+    "name": "联合健康",
+    "side": "buy",
+    "date": "2025-09-17",
+    "time": "2025/09/17 14:03:31 (美东)",
+    "quantity": 21.0,
+    "price": 342.42,
+    "amount": 7190.82
+  },
+  {
+    "ticker": "UNH",
+    "name": "联合健康",
+    "side": "sell",
+    "date": "2025-09-16",
+    "time": "2025/09/16 09:38:48 (美东)",
+    "quantity": 6.0,
+    "price": 343.6,
+    "amount": 2061.6
+  },
+  {
+    "ticker": "AAPL",
+    "name": "苹果",
+    "side": "buy",
+    "date": "2025-09-05",
+    "time": "2025/09/05 10:16:26 (美东)",
+    "quantity": 60.0,
+    "price": 240.28,
+    "amount": 14416.8
+  },
+  {
+    "ticker": "BABA",
+    "name": "阿里巴巴",
+    "side": "buy",
+    "date": "2025-08-27",
+    "time": "2025/08/27 09:36:28 (美东)",
+    "quantity": 400.0,
+    "price": 121.22,
+    "amount": 48488.0
+  },
+  {
+    "ticker": "AAPL",
+    "name": "苹果",
+    "side": "buy",
+    "date": "2025-08-27",
+    "time": "2025/08/27 09:30:44 (美东)",
+    "quantity": 9.0,
+    "price": 228.83,
+    "amount": 2059.47
+  },
+  {
+    "ticker": "MSFT",
+    "name": "微软",
+    "side": "buy",
+    "date": "2025-08-26",
+    "time": "2025/08/26 09:32:27 (美东)",
+    "quantity": 30.0,
+    "price": 503.65,
+    "amount": 15109.5
+  },
+  {
+    "ticker": "INTC",
+    "name": "英特尔",
+    "side": "buy",
+    "date": "2025-08-15",
+    "time": "2025/08/15 09:48:22 (美东)",
+    "quantity": 500.0,
+    "price": 24.99,
+    "amount": 12495.0
+  },
+  {
+    "ticker": "UNH",
+    "name": "联合健康",
+    "side": "buy",
+    "date": "2025-08-15",
+    "time": "2025/08/15 09:38:03 (美东)",
+    "quantity": 30.0,
+    "price": 300.0,
+    "amount": 9000.0
+  },
+  {
+    "ticker": "BABA",
+    "name": "阿里巴巴",
+    "side": "buy",
+    "date": "2025-08-14",
+    "time": "2025/08/14 10:34:56 (美东)",
+    "quantity": 300.0,
+    "price": 122.72,
+    "amount": 36816.0
+  },
+  {
+    "ticker": "INTC",
+    "name": "英特尔",
+    "side": "buy",
+    "date": "2025-08-04",
+    "time": "2025/08/04 10:38:58 (美东)",
+    "quantity": 800.0,
+    "price": 19.4,
+    "amount": 15520.0
+  },
+  {
+    "ticker": "TSLA",
+    "name": "特斯拉",
+    "side": "buy",
+    "date": "2025-08-01",
+    "time": "2025/08/01 14:09:37 (美东)",
+    "quantity": 30.0,
+    "price": 302.0,
+    "amount": 9060.0
+  },
+  {
+    "ticker": "UNH",
+    "name": "联合健康",
+    "side": "buy",
+    "date": "2025-08-01",
+    "time": "2025/08/01 11:07:37 (美东)",
+    "quantity": 30.0,
+    "price": 242.7,
+    "amount": 7281.0
+  },
+  {
+    "ticker": "BABA",
+    "name": "阿里巴巴",
+    "side": "buy",
+    "date": "2025-07-30",
+    "time": "2025/07/30 10:47:56 (美东)",
+    "quantity": 300.0,
+    "price": 118.78,
+    "amount": 35634.0
+  },
+  {
+    "ticker": "UNH",
+    "name": "联合健康",
+    "side": "buy",
+    "date": "2025-07-30",
+    "time": "2025/07/30 09:31:40 (美东)",
+    "quantity": 30.0,
+    "price": 262.88,
+    "amount": 7886.4
+  },
+  {
+    "ticker": "BABA",
+    "name": "阿里巴巴",
+    "side": "sell",
+    "date": "2025-07-25",
+    "time": "2025/07/25 10:03:21 (美东)",
+    "quantity": 1800.0,
+    "price": 120.14,
+    "amount": 216252.0
+  },
+  {
+    "ticker": "TSLA",
+    "name": "特斯拉",
+    "side": "buy",
+    "date": "2025-07-24",
+    "time": "2025/07/24 09:40:08 (美东)",
+    "quantity": 50.0,
+    "price": 302.0,
+    "amount": 15100.0
+  },
+  {
+    "ticker": "TSLA",
+    "name": "特斯拉",
+    "side": "sell",
+    "date": "2025-07-22",
+    "time": "2025/07/22 14:10:10 (美东)",
+    "quantity": 40.0,
+    "price": 333.3,
+    "amount": 13332.0
+  },
+  {
+    "ticker": "UNH",
+    "name": "联合健康",
+    "side": "buy",
+    "date": "2025-07-22",
+    "time": "2025/07/22 10:05:07 (美东)",
+    "quantity": 30.0,
+    "price": 286.37,
+    "amount": 8591.1
+  },
+  {
+    "ticker": "TSLA",
+    "name": "特斯拉",
+    "side": "sell",
+    "date": "2025-07-17",
+    "time": "2025/07/17 12:38:14 (美东)",
+    "quantity": 40.0,
+    "price": 321.0,
+    "amount": 12840.0
+  },
+  {
+    "ticker": "BABA",
+    "name": "阿里巴巴",
+    "side": "buy",
+    "date": "2025-07-07",
+    "time": "2025/07/07 09:35:20 (美东)",
+    "quantity": 500.0,
+    "price": 108.0,
+    "amount": 54000.0
+  },
+  {
+    "ticker": "TSLA",
+    "name": "特斯拉",
+    "side": "buy",
+    "date": "2025-07-02",
+    "time": "2025/07/02 10:26:18 (美东)",
+    "quantity": 40.0,
+    "price": 313.71,
+    "amount": 12548.4
+  },
+  {
+    "ticker": "INTC",
+    "name": "英特尔",
+    "side": "sell",
+    "date": "2025-06-27",
+    "time": "2025/06/27 15:11:30 (美东)",
+    "quantity": 1700.0,
+    "price": 22.615,
+    "amount": 38445.5
+  },
+  {
+    "ticker": "BABA",
+    "name": "阿里巴巴",
+    "side": "buy",
+    "date": "2025-06-18",
+    "time": "2025/06/18 10:12:32 (美东)",
+    "quantity": 300.0,
+    "price": 114.22,
+    "amount": 34266.0
+  },
+  {
+    "ticker": "BABA",
+    "name": "阿里巴巴",
+    "side": "buy",
+    "date": "2025-06-13",
+    "time": "2025/06/13 10:12:50 (美东)",
+    "quantity": 500.0,
+    "price": 113.7,
+    "amount": 56850.0
+  },
+  {
+    "ticker": "TSLA",
+    "name": "特斯拉",
+    "side": "buy",
+    "date": "2025-06-11",
+    "time": "2025/06/11 10:29:50 (美东)",
+    "quantity": 40.0,
+    "price": 333.0,
+    "amount": 13320.0
+  },
+  {
+    "ticker": "BABA",
+    "name": "阿里巴巴",
+    "side": "buy",
+    "date": "2025-05-30",
+    "time": "2025/05/30 10:35:03 (美东)",
+    "quantity": 300.0,
+    "price": 114.2,
+    "amount": 34260.0
+  },
+  {
+    "ticker": "UNH",
+    "name": "联合健康",
+    "side": "buy",
+    "date": "2025-05-28",
+    "time": "2025/05/28 11:13:28 (美东)",
+    "quantity": 30.0,
+    "price": 301.4,
+    "amount": 9042.0
+  },
+  {
+    "ticker": "BABA",
+    "name": "阿里巴巴",
+    "side": "buy",
+    "date": "2025-05-28",
+    "time": "2025/05/28 09:49:36 (美东)",
+    "quantity": 300.0,
+    "price": 117.2,
+    "amount": 35160.0
+  },
+  {
+    "ticker": "BABA",
+    "name": "阿里巴巴",
+    "side": "buy",
+    "date": "2025-05-27",
+    "time": "2025/05/27 09:38:17 (美东)",
+    "quantity": 300.0,
+    "price": 119.2,
+    "amount": 35760.0
+  },
+  {
+    "ticker": "INTC",
+    "name": "英特尔",
+    "side": "buy",
+    "date": "2025-05-23",
+    "time": "2025/05/23 09:45:52 (美东)",
+    "quantity": 500.0,
+    "price": 20.0,
+    "amount": 10000.0
+  },
+  {
+    "ticker": "INTC",
+    "name": "英特尔",
+    "side": "buy",
+    "date": "2025-05-22",
+    "time": "2025/05/22 15:46:06 (美东)",
+    "quantity": 700.0,
+    "price": 20.68,
+    "amount": 14476.0
+  },
+  {
+    "ticker": "BABA",
+    "name": "阿里巴巴",
+    "side": "buy",
+    "date": "2025-05-15",
+    "time": "2025/05/15 12:33:30 (美东)",
+    "quantity": 299.0,
+    "price": 123.4,
+    "amount": 36896.6
+  },
+  {
+    "ticker": "TSLA",
+    "name": "特斯拉",
+    "side": "sell",
+    "date": "2025-05-09",
+    "time": "2025/05/09 10:20:38 (美东)",
+    "quantity": 100.0,
+    "price": 303.15,
+    "amount": 30315.0
+  },
+  {
+    "ticker": "INTC",
+    "name": "英特尔",
+    "side": "buy",
+    "date": "2025-05-08",
+    "time": "2025/05/08 11:44:45 (美东)",
+    "quantity": 500.0,
+    "price": 21.0899,
+    "amount": 10544.95
+  },
+  {
+    "ticker": "BABA",
+    "name": "阿里巴巴",
+    "side": "buy",
+    "date": "2025-05-05",
+    "time": "2025/05/05 11:39:27 (美东)",
+    "quantity": 200.0,
+    "price": 126.58,
+    "amount": 25316.0
+  },
+  {
+    "ticker": "MSFT",
+    "name": "微软",
+    "side": "sell",
+    "date": "2025-05-01",
+    "time": "2025/05/01 07:21:47 (美东)",
+    "quantity": 83.0,
+    "price": 430.51,
+    "amount": 35732.33
+  },
+  {
+    "ticker": "TSLA",
+    "name": "特斯拉",
+    "side": "sell",
+    "date": "2025-04-28",
+    "time": "2025/04/28 11:07:32 (美东)",
+    "quantity": 50.0,
+    "price": 280.376,
+    "amount": 14018.8
+  },
+  {
+    "ticker": "TSLA",
+    "name": "特斯拉",
+    "side": "sell",
+    "date": "2025-04-25",
+    "time": "2025/04/25 11:21:53 (美东)",
+    "quantity": 50.0,
+    "price": 279.0,
+    "amount": 13950.0
+  },
+  {
+    "ticker": "TSLA",
+    "name": "特斯拉",
+    "side": "buy",
+    "date": "2025-03-25",
+    "time": "2025/03/25 10:51:39 (美东)",
+    "quantity": 82.0,
+    "price": 278.64,
+    "amount": 22848.48
+  },
+  {
+    "ticker": "BABA",
+    "name": "阿里巴巴",
+    "side": "sell",
+    "date": "2025-02-25",
+    "time": "2025/02/25 09:59:54 (美东)",
+    "quantity": 3290.0,
+    "price": 132.08,
+    "amount": 434543.2
+  },
+  {
+    "ticker": "TSLA",
+    "name": "特斯拉",
+    "side": "buy",
+    "date": "2025-01-31",
+    "time": "2025/01/31 09:59:57 (美东)",
+    "quantity": 60.0,
+    "price": 414.61,
+    "amount": 24876.6
+  },
+  {
+    "ticker": "MSFT",
+    "name": "微软",
+    "side": "buy",
+    "date": "2025-01-31",
+    "time": "2025/01/31 10:24:42 (美东)",
+    "quantity": 145.0,
+    "price": 418.49,
+    "amount": 60681.05
+  },
+  {
+    "ticker": "BABA",
+    "name": "阿里巴巴",
+    "side": "sell",
+    "date": "2025-01-31",
+    "time": "2025/01/31 09:57:15 (美东)",
+    "quantity": 841.0,
+    "price": 101.22,
+    "amount": 85126.02
+  },
+  {
+    "ticker": "MSFT",
+    "name": "微软",
+    "side": "buy",
+    "date": "2024-12-16",
+    "time": "2024/12/16 10:43:10 (美东)",
+    "quantity": 5.0,
+    "price": 446.78,
+    "amount": 2233.9
+  },
+  {
+    "ticker": "TSLA",
+    "name": "特斯拉",
+    "side": "buy",
+    "date": "2024-12-16",
+    "time": "2024/12/16 10:33:28 (美东)",
+    "quantity": 130.0,
+    "price": 445.5,
+    "amount": 57915.0
+  },
+  {
+    "ticker": "BABA",
+    "name": "阿里巴巴",
+    "side": "sell",
+    "date": "2024-12-16",
+    "time": "2024/12/16 10:32:32 (美东)",
+    "quantity": 590.0,
+    "price": 86.37,
+    "amount": 50958.3
+  },
+  {
+    "ticker": "MSFT",
+    "name": "微软",
+    "side": "buy",
+    "date": "2024-12-13",
+    "time": "2024/12/13 10:32:07 (美东)",
+    "quantity": 40.0,
+    "price": 449.32,
+    "amount": 17972.8
+  },
+  {
+    "ticker": "TSLA",
+    "name": "特斯拉",
+    "side": "buy",
+    "date": "2024-12-13",
+    "time": "2024/12/13 10:31:39 (美东)",
+    "quantity": 60.0,
+    "price": 430.13,
+    "amount": 25807.8
+  },
+  {
+    "ticker": "BABA",
+    "name": "阿里巴巴",
+    "side": "sell",
+    "date": "2024-12-13",
+    "time": "2024/12/13 10:31:01 (美东)",
+    "quantity": 307.0,
+    "price": 87.58,
+    "amount": 26887.06
+  },
+  {
+    "ticker": "MSFT",
+    "name": "微软",
+    "side": "buy",
+    "date": "2024-12-10",
+    "time": "2024/12/10 11:02:59 (美东)",
+    "quantity": 19.0,
+    "price": 447.63,
+    "amount": 8504.97
+  },
+  {
+    "ticker": "TSLA",
+    "name": "特斯拉",
+    "side": "buy",
+    "date": "2024-12-10",
+    "time": "2024/12/10 11:01:06 (美东)",
+    "quantity": 90.0,
+    "price": 401.5,
+    "amount": 36135.0
+  },
+  {
+    "ticker": "BABA",
+    "name": "阿里巴巴",
+    "side": "sell",
+    "date": "2024-12-10",
+    "time": "2024/12/10 11:00:27 (美东)",
+    "quantity": 100.0,
+    "price": 89.8,
+    "amount": 8980.0
+  },
+  {
+    "ticker": "MSFT",
+    "name": "微软",
+    "side": "buy",
+    "date": "2024-12-05",
+    "time": "2024/12/05 12:35:20 (美东)",
+    "quantity": 18.0,
+    "price": 442.78,
+    "amount": 7970.04
+  },
+  {
+    "ticker": "TSLA",
+    "name": "特斯拉",
+    "side": "buy",
+    "date": "2024-12-05",
+    "time": "2024/12/05 12:27:44 (美东)",
+    "quantity": 26.0,
+    "price": 370.735,
+    "amount": 9639.11
+  },
+  {
+    "ticker": "BABA",
+    "name": "阿里巴巴",
+    "side": "sell",
+    "date": "2024-12-05",
+    "time": "2024/12/05 12:26:33 (美东)",
+    "quantity": 199.0,
+    "price": 84.07,
+    "amount": 16729.93
+  },
+  {
+    "ticker": "TSLA",
+    "name": "特斯拉",
+    "side": "buy",
+    "date": "2024-11-18",
+    "time": "2024/11/18 09:41:01 (美东)",
+    "quantity": 10.0,
+    "price": 344.265,
+    "amount": 3442.65
+  },
+  {
+    "ticker": "TSLA",
+    "name": "特斯拉",
+    "side": "buy",
+    "date": "2024-11-06",
+    "time": "2024/11/06 09:32:46 (美东)",
+    "quantity": 10.0,
+    "price": 286.43,
+    "amount": 2864.3
+  }
+]
