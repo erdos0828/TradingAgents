@@ -11,9 +11,8 @@ from mcp.server import Server
 from mcp.server.sse import SseServerTransport
 from mcp.types import TextContent, Tool
 from starlette.applications import Starlette
-from starlette.requests import Request
 from starlette.responses import PlainTextResponse
-from starlette.routing import Route
+from starlette.routing import Mount
 
 from mcp_yfinance import __version__
 from mcp_yfinance.tools import (
@@ -135,33 +134,39 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
     return [TextContent(type="text", text=result)]
 
 
-async def handle_sse(scope: dict, receive: Any, send: Any) -> None:
-    async with sse.connect_sse(scope, receive, send) as (read_stream, write_stream):
-        await server.run(
-            read_stream, write_stream, server.create_initialization_options()
+async def mcp_asgi_app(scope: dict, receive: Any, send: Any) -> None:
+    """Pure ASGI app handling MCP SSE and message endpoints.
+
+    Using a single mounted ASGI app avoids Starlette's Request wrapping,
+    which in some versions only passes ``request`` regardless of signature.
+    """
+    if scope.get("type") != "http":
+        return
+
+    path = scope.get("path", "")
+    method = scope.get("method", "")
+
+    if path == "/" and method == "GET":
+        response = PlainTextResponse(
+            f"mcp-yfinance v{__version__}\n"
+            "SSE endpoint: GET /sse\n"
+            "POST messages: /messages/\n"
         )
-
-
-async def handle_messages(scope: dict, receive: Any, send: Any) -> None:
-    await sse.handle_post_message(scope, receive, send)
-
-
-async def homepage(_request: Request) -> PlainTextResponse:
-    return PlainTextResponse(
-        f"mcp-yfinance v{__version__}\n"
-        "SSE endpoint: GET /sse\n"
-        "POST messages: /messages/\n"
-    )
+        await response(scope, receive, send)
+    elif path == "/sse" and method == "GET":
+        async with sse.connect_sse(scope, receive, send) as (read_stream, write_stream):
+            await server.run(
+                read_stream, write_stream, server.create_initialization_options()
+            )
+    elif path == "/messages/" and method == "POST":
+        await sse.handle_post_message(scope, receive, send)
+    else:
+        response = PlainTextResponse("Not found", status_code=404)
+        await response(scope, receive, send)
 
 
 def create_starlette_app() -> Starlette:
-    return Starlette(
-        routes=[
-            Route("/", homepage),
-            Route("/sse", handle_sse),
-            Route("/messages/", handle_messages, methods=["POST"]),
-        ]
-    )
+    return Starlette(routes=[Mount("/", app=mcp_asgi_app)])
 
 
 def main() -> None:
