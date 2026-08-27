@@ -198,13 +198,18 @@ async def list_tools() -> list[Tool]:
 
 @server.call_tool()
 async def call_tool(name: str, arguments: dict) -> list[TextContent]:
+    logger.info("MCP request: tool=%s args=%s", name, arguments)
     if name not in TOOL_MAP:
+        logger.error("Unknown tool requested: %s", name)
         raise ValueError(f"Unknown tool: {name}")
     try:
         result = TOOL_MAP[name](**arguments)
     except Exception as exc:
-        logger.exception("Tool %s failed", name)
+        logger.exception("Tool %s failed with args %s", name, arguments)
         result = f"Error running {name}: {exc}"
+    summary = result[:200].replace("\n", " ") if isinstance(result, str) else str(result)[:200]
+    status = "error" if isinstance(result, str) and result.startswith("Error") else "ok"
+    logger.info("MCP response: tool=%s status=%s summary=%s...", name, status, summary)
     return [TextContent(type="text", text=result)]
 
 
