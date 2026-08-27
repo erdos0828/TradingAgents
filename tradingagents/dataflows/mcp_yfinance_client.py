@@ -12,8 +12,11 @@ import json
 import logging
 import os
 import threading
+import time
+from collections.abc import Coroutine
 from typing import Any
 
+import httpx
 import pandas as pd
 from mcp.client.session import ClientSession
 from mcp.client.sse import sse_client
@@ -24,7 +27,7 @@ DEFAULT_MCP_YFINANCE_URL = "http://localhost:8080/sse"
 _MCP_YFINANCE_URL = os.getenv("MCP_YFINANCE_URL", DEFAULT_MCP_YFINANCE_URL)
 
 
-def _run_async(coro: asyncio.coroutine) -> Any:  # type: ignore[no-untyped-def]
+def _run_async(coro: Coroutine[Any, Any, Any]) -> Any:
     """Run an async coroutine from synchronous code.
 
     ``asyncio.run`` is used when no event loop is running. If the caller is
@@ -51,8 +54,26 @@ def _run_async(coro: asyncio.coroutine) -> Any:  # type: ignore[no-untyped-def]
         thread.start()
         thread.join()
         if exception:
-            raise exception[0] from exception[0]
+            raise exception[0] from None
         return result[0]
+
+
+def _httpx_client_factory(**kwargs: Any) -> httpx.AsyncClient:
+    """Create an httpx client that ignores environment proxy variables.
+
+    This prevents stale ``HTTP_PROXY``/``ALL_PROXY`` values from routing MCP
+    requests through a local proxy that cannot reach the remote SSE endpoint.
+    """
+    kwargs.setdefault("trust_env", False)
+    kwargs.setdefault("timeout", 60.0)
+    return httpx.AsyncClient(**kwargs)
+
+
+def _is_retriable_error(exc: BaseException) -> bool:
+    """Return True if *exc* (or an ExceptionGroup wrapping it) is transient."""
+    if hasattr(exc, "exceptions"):
+        return any(_is_retriable_error(e) for e in exc.exceptions)  # type: ignore[attr-defined]
+    return isinstance(exc, (httpx.ConnectError, httpx.TimeoutException, OSError))
 
 
 async def _call_tool_async(tool_name: str, arguments: dict[str, Any]) -> Any:
@@ -60,7 +81,7 @@ async def _call_tool_async(tool_name: str, arguments: dict[str, Any]) -> Any:
     url = _MCP_YFINANCE_URL
     logger.debug("MCP call %s to %s with args %s", tool_name, url, arguments)
     async with (
-        sse_client(url) as (read_stream, write_stream),
+        sse_client(url, httpx_client_factory=_httpx_client_factory) as (read_stream, write_stream),
         ClientSession(read_stream, write_stream) as session,
     ):
         await session.initialize()
@@ -75,8 +96,32 @@ async def _call_tool_async(tool_name: str, arguments: dict[str, Any]) -> Any:
 
 
 def call_mcp_tool(tool_name: str, arguments: dict[str, Any]) -> Any:
-    """Call a remote yfinance MCP tool and return the parsed JSON payload."""
-    return _run_async(_call_tool_async(tool_name, arguments))
+    """Call a remote yfinance MCP tool and return the parsed JSON payload.
+
+    Retries transient network errors with exponential backoff to survive
+    intermittent connectivity to the remote MCP server during batch runs.
+    """
+    max_retries = 3
+    last_exc: BaseException | None = None
+    for attempt in range(1, max_retries + 1):
+        try:
+            return _run_async(_call_tool_async(tool_name, arguments))
+        except BaseException as exc:
+            last_exc = exc
+            if attempt == max_retries or not _is_retriable_error(exc):
+                raise
+            delay = 2 ** (attempt - 1)
+            logger.warning(
+                "MCP call %s failed on attempt %d/%d: %s; retrying in %ds",
+                tool_name,
+                attempt,
+                max_retries,
+                exc,
+                delay,
+            )
+            time.sleep(delay)
+    # Unreachable in practice, but keeps mypy happy.
+    raise last_exc  # pragma: no cover
 
 
 def _records_to_dataframe(records: list[dict[str, Any]], date_col: str = "date") -> pd.DataFrame:
