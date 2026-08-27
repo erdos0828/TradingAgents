@@ -5,12 +5,14 @@ from __future__ import annotations
 import argparse
 import logging
 
-from mcp.server.fastmcp import FastMCP
+import uvicorn
+from mcp.server import Server
+from mcp.server.sse import SseServerTransport
+from mcp.types import TextContent, Tool
 from starlette.applications import Starlette
 from starlette.requests import Request
 from starlette.responses import PlainTextResponse
-from starlette.routing import Mount, Route
-import uvicorn
+from starlette.routing import Route
 
 from mcp_yfinance import __version__
 from mcp_yfinance.tools import (
@@ -24,36 +26,143 @@ from mcp_yfinance.tools import (
 
 logger = logging.getLogger("mcp-yfinance")
 
-mcp = FastMCP("yfinance")
+server = Server("yfinance")
+sse = SseServerTransport("/messages/")
 
-mcp.add_tool(get_stock_price)
-mcp.add_tool(get_stock_history)
-mcp.add_tool(get_stock_info)
-mcp.add_tool(get_financials)
-mcp.add_tool(get_recommendations)
-mcp.add_tool(search_tickers)
+TOOLS = [
+    Tool(
+        name="get_stock_price",
+        description="Return the latest OHLCV price and change for a ticker.",
+        inputSchema={
+            "type": "object",
+            "properties": {"ticker": {"type": "string", "description": "Stock symbol, e.g. AAPL or 600519.SS"}},
+            "required": ["ticker"],
+        },
+    ),
+    Tool(
+        name="get_stock_history",
+        description="Return historical OHLCV data for a ticker.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "ticker": {"type": "string"},
+                "period": {
+                    "type": "string",
+                    "description": "yfinance period such as 1d, 5d, 1mo, 3mo, 6mo, 1y, ytd, max",
+                    "default": "1mo",
+                },
+                "interval": {
+                    "type": "string",
+                    "description": "yfinance interval such as 1m, 15m, 1h, 1d, 1wk",
+                    "default": "1d",
+                },
+                "start": {"type": "string", "description": "Start date YYYY-MM-DD", "default": None},
+                "end": {"type": "string", "description": "End date YYYY-MM-DD", "default": None},
+            },
+            "required": ["ticker"],
+        },
+    ),
+    Tool(
+        name="get_stock_info",
+        description="Return company/quote metadata for a ticker.",
+        inputSchema={
+            "type": "object",
+            "properties": {"ticker": {"type": "string"}},
+            "required": ["ticker"],
+        },
+    ),
+    Tool(
+        name="get_financials",
+        description="Return annual financial statements for a ticker.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "ticker": {"type": "string"},
+                "statement": {
+                    "type": "string",
+                    "enum": ["income", "balance", "cash"],
+                    "default": "income",
+                },
+            },
+            "required": ["ticker"],
+        },
+    ),
+    Tool(
+        name="get_recommendations",
+        description="Return recent analyst recommendations for a ticker.",
+        inputSchema={
+            "type": "object",
+            "properties": {"ticker": {"type": "string"}},
+            "required": ["ticker"],
+        },
+    ),
+    Tool(
+        name="search_tickers",
+        description="Search for tickers by company name or symbol.",
+        inputSchema={
+            "type": "object",
+            "properties": {"query": {"type": "string"}},
+            "required": ["query"],
+        },
+    ),
+]
+
+TOOL_MAP = {
+    "get_stock_price": get_stock_price,
+    "get_stock_history": get_stock_history,
+    "get_stock_info": get_stock_info,
+    "get_financials": get_financials,
+    "get_recommendations": get_recommendations,
+    "search_tickers": search_tickers,
+}
+
+
+@server.list_tools()
+async def list_tools() -> list[Tool]:
+    return TOOLS
+
+
+@server.call_tool()
+async def call_tool(name: str, arguments: dict) -> list[TextContent]:
+    if name not in TOOL_MAP:
+        raise ValueError(f"Unknown tool: {name}")
+    try:
+        result = TOOL_MAP[name](**arguments)
+    except Exception as exc:
+        logger.exception("Tool %s failed", name)
+        result = f"Error running {name}: {exc}"
+    return [TextContent(type="text", text=result)]
+
+
+async def handle_sse(request: Request) -> None:
+    async with sse.connect_sse(
+        request.scope, request.receive, request.send
+    ) as (read_stream, write_stream):
+        await server.run(
+            read_stream, write_stream, server.create_initialization_options()
+        )
+
+
+async def handle_messages(request: Request) -> None:
+    await sse.handle_post_message(request.scope, request.receive, request.send)
+
+
+async def homepage(_request: Request) -> PlainTextResponse:
+    return PlainTextResponse(
+        f"mcp-yfinance v{__version__}\n"
+        "SSE endpoint: GET /sse\n"
+        "POST messages: /messages/\n"
+    )
 
 
 def create_starlette_app() -> Starlette:
-    """Build a Starlette app that serves the MCP server over SSE."""
-    # FastMCP.sse() exposes the standard MCP HTTP/SSE endpoints.
-    # GET /sse   - establish the Server-Sent Events stream
-    # POST /messages/ - JSON-RPC messages over the active SSE session
-    sse = mcp.sse()
-
-    async def homepage(_request: Request) -> PlainTextResponse:
-        return PlainTextResponse(
-            f"mcp-yfinance v{__version__}\n"
-            "SSE endpoint: GET /sse\n"
-            "POST messages: /messages/\n"
-        )
-
-    routes = [
-        Route("/", homepage),
-        Route("/sse", endpoint=sse.handle_get),
-        Route("/messages/", endpoint=sse.handle_post),
-    ]
-    return Starlette(routes=routes)
+    return Starlette(
+        routes=[
+            Route("/", homepage),
+            Route("/sse", handle_sse),
+            Route("/messages/", handle_messages, methods=["POST"]),
+        ]
+    )
 
 
 def main() -> None:
