@@ -14,4 +14,4 @@ else
     PYTHON=python3
 fi
 
-exec "${PYTHON}" -m mcp_yfinance.server --host "${HOST}" --port "${PORT}"
+PYTHONPATH="${PYTHONPATH:-}:$(pwd)/src" exec "${PYTHON}" -m mcp_yfinance.server --host "${HOST}" --port "${PORT}"
