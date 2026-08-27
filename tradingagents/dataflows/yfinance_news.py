@@ -3,11 +3,14 @@
 import contextlib
 from datetime import datetime, timedelta, timezone
 
-import yfinance as yf
 from dateutil.relativedelta import relativedelta
 
+from tradingagents.dataflows.mcp_yfinance_client import (
+    mcp_get_news,
+    mcp_search_news,
+)
+
 from .config import get_config
-from .stockstats_utils import yf_retry
 from .symbol_utils import normalize_symbol
 
 
@@ -107,8 +110,7 @@ def get_news_yfinance(
     canonical = normalize_symbol(ticker)
     resolved = "" if canonical == ticker else f" (resolved to {canonical})"
     try:
-        stock = yf.Ticker(canonical)
-        news = yf_retry(lambda: stock.get_news(count=article_limit))
+        news = mcp_get_news(canonical, count=article_limit)
 
         if not news:
             return f"No news found for {ticker}{resolved}"
@@ -174,14 +176,10 @@ def get_global_news_yfinance(
 
     try:
         for query in search_queries:
-            search = yf_retry(lambda q=query: yf.Search(
-                query=q,
-                news_count=limit,
-                enable_fuzzy_query=True,
-            ))
+            search_news = mcp_search_news(query, count=limit)
 
-            if search.news:
-                for article in search.news:
+            if search_news:
+                for article in search_news:
                     # Handle both flat and nested structures
                     if "content" in article:
                         data = _extract_article_data(article)

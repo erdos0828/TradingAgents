@@ -18,10 +18,13 @@ from mcp_yfinance import __version__
 from mcp_yfinance.tools import (
     download_stock_data,
     get_financials,
+    get_insider_transactions,
+    get_news,
     get_recommendations,
     get_stock_history,
     get_stock_info,
     get_stock_price,
+    search_news,
     search_tickers,
 )
 
@@ -102,7 +105,7 @@ TOOLS = [
     ),
     Tool(
         name="get_financials",
-        description="Return annual financial statements for a ticker.",
+        description="Return annual or quarterly financial statements for a ticker.",
         inputSchema={
             "type": "object",
             "properties": {
@@ -111,6 +114,11 @@ TOOLS = [
                     "type": "string",
                     "enum": ["income", "balance", "cash"],
                     "default": "income",
+                },
+                "freq": {
+                    "type": "string",
+                    "enum": ["annual", "quarterly"],
+                    "default": "annual",
                 },
             },
             "required": ["ticker"],
@@ -134,6 +142,39 @@ TOOLS = [
             "required": ["query"],
         },
     ),
+    Tool(
+        name="get_news",
+        description="Return recent news articles for a ticker.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "ticker": {"type": "string"},
+                "count": {"type": "integer", "default": 20},
+            },
+            "required": ["ticker"],
+        },
+    ),
+    Tool(
+        name="search_news",
+        description="Return news articles from a fuzzy search query.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "query": {"type": "string"},
+                "count": {"type": "integer", "default": 10},
+            },
+            "required": ["query"],
+        },
+    ),
+    Tool(
+        name="get_insider_transactions",
+        description="Return insider transaction data for a ticker.",
+        inputSchema={
+            "type": "object",
+            "properties": {"ticker": {"type": "string"}},
+            "required": ["ticker"],
+        },
+    ),
 ]
 
 TOOL_MAP = {
@@ -144,6 +185,9 @@ TOOL_MAP = {
     "get_financials": get_financials,
     "get_recommendations": get_recommendations,
     "search_tickers": search_tickers,
+    "get_news": get_news,
+    "search_news": search_news,
+    "get_insider_transactions": get_insider_transactions,
 }
 
 

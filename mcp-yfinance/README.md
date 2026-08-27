@@ -8,8 +8,11 @@ A standalone MCP (Model Context Protocol) server that exposes [yfinance](https:/
 - `get_stock_history(ticker, period, interval, start, end)` - historical OHLCV (single ticker)
 - `download_stock_data(tickers, period, interval, start, end, auto_adjust, multi_level_index)` - batch historical OHLCV via `yf.download()`
 - `get_stock_info(ticker)` - company/quote metadata
-- `get_financials(ticker, statement)` - income / balance / cash statements
+- `get_financials(ticker, statement, freq)` - income / balance / cash statements (annual or quarterly)
 - `get_recommendations(ticker)` - recent analyst recommendations
+- `get_news(ticker, count)` - recent news articles for a ticker
+- `search_news(query, count)` - global/macro news via `yf.Search`
+- `get_insider_transactions(ticker)` - insider transaction data
 - `search_tickers(query)` - ticker search
 
 ## Mapping to yfinance APIs
@@ -20,8 +23,11 @@ A standalone MCP (Model Context Protocol) server that exposes [yfinance](https:/
 | `get_stock_history(ticker, ...)` | `yf.Ticker(ticker).history(...)` | Single-ticker historical OHLCV |
 | `download_stock_data(tickers, ...)` | `yf.download(tickers, ...)` | Batch/multi-ticker historical OHLCV |
 | `get_stock_info(ticker)` | `yf.Ticker(ticker).info` | Company/quote metadata |
-| `get_financials(ticker, statement)` | `yf.Ticker(ticker).financials` / `balance_sheet` / `cashflow` | Annual financial statements |
+| `get_financials(ticker, statement, freq)` | `yf.Ticker(ticker).financials` / `quarterly_income_stmt`, `balance_sheet` / `quarterly_balance_sheet`, `cashflow` / `quarterly_cashflow` | Annual or quarterly financial statements |
 | `get_recommendations(ticker)` | `yf.Ticker(ticker).recommendations` | Recent analyst recommendations |
+| `get_news(ticker, count)` | `yf.Ticker(ticker).get_news(count)` | Recent ticker news articles |
+| `search_news(query, count)` | `yf.Search(query, news_count=count, enable_fuzzy_query=True)` | Global/macro news search |
+| `get_insider_transactions(ticker)` | `yf.Ticker(ticker).insider_transactions` | Insider transaction data |
 | `search_tickers(query)` | `yf.Search(query, ...)` | Ticker/company search |
 
 ### TradingAgents integration mapping
@@ -33,10 +39,16 @@ When replacing direct yfinance calls inside TradingAgents with this MCP server, 
 | `yf.Ticker(ticker).info` | `get_stock_info(ticker)` |
 | `yf.Ticker(ticker).history(...)` | `get_stock_history(ticker, ...)` |
 | `yf.download(tickers, start=..., end=..., auto_adjust=True, ...)` | `download_stock_data(tickers, start=..., end=..., auto_adjust=True, ...)` |
-| `yf.Ticker(ticker).financials` | `get_financials(ticker, statement="income")` |
-| `yf.Ticker(ticker).balance_sheet` | `get_financials(ticker, statement="balance")` |
-| `yf.Ticker(ticker).cashflow` | `get_financials(ticker, statement="cash")` |
+| `yf.Ticker(ticker).financials` | `get_financials(ticker, statement="income", freq="annual")` |
+| `yf.Ticker(ticker).quarterly_income_stmt` | `get_financials(ticker, statement="income", freq="quarterly")` |
+| `yf.Ticker(ticker).balance_sheet` | `get_financials(ticker, statement="balance", freq="annual")` |
+| `yf.Ticker(ticker).quarterly_balance_sheet` | `get_financials(ticker, statement="balance", freq="quarterly")` |
+| `yf.Ticker(ticker).cashflow` | `get_financials(ticker, statement="cash", freq="annual")` |
+| `yf.Ticker(ticker).quarterly_cashflow` | `get_financials(ticker, statement="cash", freq="quarterly")` |
 | `yf.Ticker(ticker).recommendations` | `get_recommendations(ticker)` |
+| `yf.Ticker(ticker).get_news(count)` | `get_news(ticker, count)` |
+| `yf.Search(query, news_count=count, enable_fuzzy_query=True)` | `search_news(query, count)` |
+| `yf.Ticker(ticker).insider_transactions` | `get_insider_transactions(ticker)` |
 
 ## Run locally
 

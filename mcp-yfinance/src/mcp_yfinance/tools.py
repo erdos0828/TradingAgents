@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timedelta
 from typing import Any
 
 import yfinance as yf
@@ -196,21 +195,23 @@ def get_stock_info(ticker: str) -> str:
     return _json_dumps(result)
 
 
-def get_financials(ticker: str, statement: str = "income") -> str:
-    """Return annual financial statements for a ticker.
+def get_financials(ticker: str, statement: str = "income", freq: str = "annual") -> str:
+    """Return financial statements for a ticker.
 
     Args:
         statement: One of 'income', 'balance', 'cash'.
+        freq: 'annual' or 'quarterly'.
     """
     ticker = ticker.strip().upper()
     stock = yf.Ticker(ticker)
 
+    quarterly = freq.lower() == "quarterly"
     if statement == "income":
-        df = stock.financials
+        df = stock.quarterly_income_stmt if quarterly else stock.income_stmt
     elif statement == "balance":
-        df = stock.balance_sheet
+        df = stock.quarterly_balance_sheet if quarterly else stock.balance_sheet
     elif statement == "cash":
-        df = stock.cashflow
+        df = stock.quarterly_cashflow if quarterly else stock.cashflow
     else:
         return f"Unknown statement type: {statement}. Use 'income', 'balance', or 'cash'."
 
@@ -222,7 +223,7 @@ def get_financials(ticker: str, statement: str = "income") -> str:
         row = {"date": col.isoformat() if hasattr(col, "isoformat") else str(col)}
         row.update({idx: str(val) for idx, val in df[col].items()})
         records.append(row)
-    return _json_dumps({"ticker": ticker, "statement": statement, "data": records})
+    return _json_dumps({"ticker": ticker, "statement": statement, "freq": freq, "data": records})
 
 
 def get_recommendations(ticker: str) -> str:
@@ -254,3 +255,46 @@ def search_tickers(query: str) -> str:
         if "ticker" in item:
             tickers.append({"ticker": item["ticker"], "title": item.get("title", "")})
     return _json_dumps({"query": query, "matches": tickers})
+
+
+def get_news(ticker: str, count: int = 20) -> str:
+    """Return recent news articles for a ticker.
+
+    Args:
+        ticker: Stock symbol, e.g. AAPL.
+        count: Maximum number of articles to retrieve (default 20).
+    """
+    ticker = ticker.strip().upper()
+    stock = yf.Ticker(ticker)
+    news = stock.get_news(count=count)
+    if not news:
+        return f"No news for {ticker}."
+    return _json_dumps({"ticker": ticker, "count": len(news), "news": news})
+
+
+def search_news(query: str, count: int = 10) -> str:
+    """Return news articles from a fuzzy yfinance Search query.
+
+    Args:
+        query: Search query, e.g. "Federal Reserve interest rates".
+        count: Maximum number of articles to retrieve (default 10).
+    """
+    search = yf.Search(query, news_count=count, enable_fuzzy_query=True)
+    news = search.news or []
+    return _json_dumps({"query": query, "count": len(news), "news": news})
+
+
+def get_insider_transactions(ticker: str) -> str:
+    """Return insider transaction data for a ticker."""
+    ticker = ticker.strip().upper()
+    stock = yf.Ticker(ticker)
+    data = stock.insider_transactions
+    if data is None or data.empty:
+        return f"No insider transactions for {ticker}."
+
+    records = []
+    for idx, row in data.iterrows():
+        record = {"index": idx.isoformat() if hasattr(idx, "isoformat") else str(idx)}
+        record.update({k: str(v) for k, v in row.items()})
+        records.append(record)
+    return _json_dumps({"ticker": ticker, "data": records})
