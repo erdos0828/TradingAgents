@@ -1,0 +1,38 @@
+[project]
+name = "mcp-yfinance"
+version = "0.1.0"
+description = "MCP server providing yfinance market data query tools"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [
+    { name = "TradingAgents" },
+]
+dependencies = [
+    "mcp>=1.6.0",
+    "yfinance>=0.2.54",
+    "pandas>=2.0.0",
+    "uvicorn>=0.30.0",
+    "starlette>=0.40.0",
+    "httpx>=0.27.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "ruff>=0.6.0",
+]
+
+[project.scripts]
+mcp-yfinance = "mcp_yfinance.server:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/mcp_yfinance"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
