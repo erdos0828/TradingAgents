@@ -183,6 +183,13 @@ class TradingAgentsGraph:
         if max_retries is not None and max_retries != "":
             kwargs["max_retries"] = _coerce_max_retries(max_retries)
 
+        # disable_thinking: cross-provider flag to skip the reasoning/thinking
+        # phase on models that default to it (e.g. Qwen 3.x thinking mode).
+        # Currently wired through LocalCompatibleChatOpenAI; other providers can
+        # opt in by honoring the same kwarg in their chat classes.
+        if self.config.get("disable_thinking"):
+            kwargs["disable_thinking"] = True
+
         return kwargs
 
     def _create_tool_nodes(self) -> dict[str, ToolNode]:

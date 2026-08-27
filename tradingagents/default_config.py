@@ -28,6 +28,7 @@ _ENV_OVERRIDES = {
     "TRADINGAGENTS_GOOGLE_THINKING_LEVEL":   "google_thinking_level",
     "TRADINGAGENTS_OPENAI_REASONING_EFFORT": "openai_reasoning_effort",
     "TRADINGAGENTS_ANTHROPIC_EFFORT":        "anthropic_effort",
+    "TRADINGAGENTS_DISABLE_THINKING":        "disable_thinking",
 }
 
 
@@ -96,6 +97,10 @@ DEFAULT_CONFIG = _apply_env_overrides({
     "google_thinking_level": None,      # "high", "minimal", etc.
     "openai_reasoning_effort": None,    # "medium", "high", "low"
     "anthropic_effort": None,           # "high", "medium", "low"
+    # Disable thinking/reasoning mode for models that support it (e.g. Qwen 3.x
+    # thinking mode, DeepSeek reasoning). When True, injects enable_thinking=false
+    # into the API request body, skipping the reasoning phase for faster inference.
+    "disable_thinking": False,
     # Sampling temperature, forwarded to every provider when set. None leaves
     # each provider at its own default. Lower values reduce run-to-run
     # variation on models that honor it; reasoning models largely ignore it

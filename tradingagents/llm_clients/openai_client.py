@@ -59,7 +59,21 @@ class LocalCompatibleChatOpenAI(NormalizedChatOpenAI):
     ``tool_choice`` langchain sends for function-calling structured output. Bind
     the schema as a tool but don't force tool_choice, so structured output works
     across local servers regardless of the model ID's capabilities (#1057).
+
+    When ``disable_thinking`` is True, injects ``enable_thinking: false`` into
+    the API request body via ``model_kwargs``. This skips the reasoning phase for
+    models that default to thinking mode (e.g. Qwen 3.x), yielding significantly
+    faster inference at the cost of the hidden chain-of-thought.
     """
+
+    def __init__(self, *args, disable_thinking: bool = False, **kwargs):
+        # Merge enable_thinking into model_kwargs (ChatOpenAI's standard escape
+        # hatch for extra API body params). Avoids PrivateAttr on Pydantic v2.
+        if disable_thinking:
+            model_kwargs = dict(kwargs.get("model_kwargs") or {})
+            model_kwargs.setdefault("enable_thinking", False)
+            kwargs["model_kwargs"] = model_kwargs
+        super().__init__(*args, **kwargs)
 
     def with_structured_output(self, schema, *, method=None, **kwargs):
         resolved = method or get_capabilities(self.model_name).preferred_structured_method
@@ -166,6 +180,7 @@ class MinimaxChatOpenAI(NormalizedChatOpenAI):
 _PASSTHROUGH_KWARGS = (
     "timeout", "max_retries", "reasoning_effort", "temperature",
     "api_key", "callbacks", "http_client", "http_async_client",
+    "disable_thinking",
 )
 
 # OpenAI's ``reasoning_effort`` is only accepted by reasoning models — the GPT-5
