@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+from typing import Any
 
 import uvicorn
 from mcp.server import Server
@@ -134,17 +135,15 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
     return [TextContent(type="text", text=result)]
 
 
-async def handle_sse(request: Request) -> None:
-    async with sse.connect_sse(
-        request.scope, request.receive, request.send
-    ) as (read_stream, write_stream):
+async def handle_sse(scope: dict, receive: Any, send: Any) -> None:
+    async with sse.connect_sse(scope, receive, send) as (read_stream, write_stream):
         await server.run(
             read_stream, write_stream, server.create_initialization_options()
         )
 
 
-async def handle_messages(request: Request) -> None:
-    await sse.handle_post_message(request.scope, request.receive, request.send)
+async def handle_messages(scope: dict, receive: Any, send: Any) -> None:
+    await sse.handle_post_message(scope, receive, send)
 
 
 async def homepage(_request: Request) -> PlainTextResponse:
