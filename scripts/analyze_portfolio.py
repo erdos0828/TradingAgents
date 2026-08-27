@@ -150,9 +150,11 @@ def main():
                         print(f"    {line.strip()}")
                 success_count += 1
             else:
-                print(f"  ✗ Failed (exit code: {result.returncode})")
+                print(f"  \u2717 Failed (exit code: {result.returncode})")
                 if result.stderr:
-                    print(f"    Error: {result.stderr[:200]}")
+                    # Print full stderr for debugging (was truncated to 200 chars)
+                    for line in result.stderr.strip().split("\n"):
+                        print(f"    {line}")
                 fail_count += 1
 
         except subprocess.TimeoutExpired:
