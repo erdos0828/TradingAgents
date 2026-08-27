@@ -94,6 +94,72 @@ def get_stock_history(
     return _json_dumps({"ticker": ticker, "count": len(records), "data": records})
 
 
+def download_stock_data(
+    tickers: str,
+    period: str = "1mo",
+    interval: str = "1d",
+    start: str | None = None,
+    end: str | None = None,
+    auto_adjust: bool = True,
+    multi_level_index: bool = False,
+) -> str:
+    """Batch-download historical OHLCV data via yf.download().
+
+    This mirrors the yfinance ``download()`` API used by TradingAgents'
+    stockstats_utils. Supports comma-separated tickers for batch fetch.
+
+    Args:
+        tickers: Comma-separated symbols, e.g. "AAPL,MSFT" or "600519.SS".
+        period: yfinance period (1d, 5d, 1mo, 3mo, 6mo, 1y, 2y, 5y, 10y, ytd, max).
+        interval: yfinance interval (1m, 2m, 5m, 15m, 30m, 60m, 90m, 1h, 1d, 5d, 1wk, 1mo, 3mo).
+        start: Optional start date (YYYY-MM-DD). Overrides period if both provided.
+        end: Optional end date (YYYY-MM-DD).
+        auto_adjust: Adjust OHLC for splits/dividends (default True).
+        multi_level_index: Return multi-index DataFrame (default False).
+    """
+    ticker_list = [t.strip().upper() for t in tickers.split(",") if t.strip()]
+    if not ticker_list:
+        return "No tickers provided."
+
+    kwargs: dict[str, Any] = {
+        "tickers": " ".join(ticker_list),
+        "interval": interval,
+        "auto_adjust": auto_adjust,
+        "multi_level_index": multi_level_index,
+        "progress": False,
+    }
+    if start and end:
+        kwargs["start"] = start
+        kwargs["end"] = end
+    else:
+        kwargs["period"] = period
+
+    df = yf.download(**kwargs)
+    if df is None or df.empty:
+        return f"No data returned for {ticker_list}."
+
+    # Normalize multi-ticker column layout to records.
+    df = df.reset_index()
+    date_col = "Date" if "Date" in df.columns else df.columns[0]
+    records = []
+    for _, row in df.iterrows():
+        record = {"date": str(row[date_col])}
+        # For single ticker without multi_level_index, columns are Open/High/Low/Close/Adj Close/Volume.
+        # For multiple tickers, columns are a MultiIndex like (Close, AAPL).
+        for col in df.columns:
+            if col == date_col:
+                continue
+            key = " ".join(str(c) for c in col) if isinstance(col, tuple) else str(col)
+            try:
+                value = float(row[col]) if col in df.columns else None
+            except (ValueError, TypeError):
+                value = str(row[col])
+            record[key] = value
+        records.append(record)
+
+    return _json_dumps({"tickers": ticker_list, "count": len(records), "data": records})
+
+
 def get_stock_info(ticker: str) -> str:
     """Return company/quote metadata for a ticker."""
     ticker = ticker.strip().upper()

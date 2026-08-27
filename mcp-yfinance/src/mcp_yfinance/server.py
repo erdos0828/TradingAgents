@@ -16,6 +16,7 @@ from starlette.routing import Mount
 
 from mcp_yfinance import __version__
 from mcp_yfinance.tools import (
+    download_stock_data,
     get_financials,
     get_recommendations,
     get_stock_history,
@@ -60,6 +61,34 @@ TOOLS = [
                 "end": {"type": "string", "description": "End date YYYY-MM-DD", "default": None},
             },
             "required": ["ticker"],
+        },
+    ),
+    Tool(
+        name="download_stock_data",
+        description="Batch-download historical OHLCV data via yf.download() for one or more tickers.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "tickers": {
+                    "type": "string",
+                    "description": "Comma-separated symbols, e.g. AAPL,MSFT or 600519.SS",
+                },
+                "period": {
+                    "type": "string",
+                    "description": "yfinance period such as 1d, 5d, 1mo, 3mo, 6mo, 1y, ytd, max",
+                    "default": "1mo",
+                },
+                "interval": {
+                    "type": "string",
+                    "description": "yfinance interval such as 1m, 15m, 1h, 1d, 1wk",
+                    "default": "1d",
+                },
+                "start": {"type": "string", "description": "Start date YYYY-MM-DD", "default": None},
+                "end": {"type": "string", "description": "End date YYYY-MM-DD", "default": None},
+                "auto_adjust": {"type": "boolean", "default": True},
+                "multi_level_index": {"type": "boolean", "default": False},
+            },
+            "required": ["tickers"],
         },
     ),
     Tool(
@@ -110,6 +139,7 @@ TOOLS = [
 TOOL_MAP = {
     "get_stock_price": get_stock_price,
     "get_stock_history": get_stock_history,
+    "download_stock_data": download_stock_data,
     "get_stock_info": get_stock_info,
     "get_financials": get_financials,
     "get_recommendations": get_recommendations,

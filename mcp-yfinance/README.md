@@ -5,7 +5,8 @@ A standalone MCP (Model Context Protocol) server that exposes [yfinance](https:/
 ## Tools
 
 - `get_stock_price(ticker)` - latest OHLCV + change
-- `get_stock_history(ticker, period, interval, start, end)` - historical OHLCV
+- `get_stock_history(ticker, period, interval, start, end)` - historical OHLCV (single ticker)
+- `download_stock_data(tickers, period, interval, start, end, auto_adjust, multi_level_index)` - batch historical OHLCV via `yf.download()`
 - `get_stock_info(ticker)` - company/quote metadata
 - `get_financials(ticker, statement)` - income / balance / cash statements
 - `get_recommendations(ticker)` - recent analyst recommendations
