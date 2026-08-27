@@ -61,18 +61,19 @@ class LocalCompatibleChatOpenAI(NormalizedChatOpenAI):
     across local servers regardless of the model ID's capabilities (#1057).
 
     When ``disable_thinking`` is True, injects ``enable_thinking: false`` into
-    the API request body via ``model_kwargs``. This skips the reasoning phase for
+    the API request body via ``extra_body``. This skips the reasoning phase for
     models that default to thinking mode (e.g. Qwen 3.x), yielding significantly
     faster inference at the cost of the hidden chain-of-thought.
     """
 
     def __init__(self, *args, disable_thinking: bool = False, **kwargs):
-        # Merge enable_thinking into model_kwargs (ChatOpenAI's standard escape
-        # hatch for extra API body params). Avoids PrivateAttr on Pydantic v2.
+        # Merge enable_thinking into extra_body (ChatOpenAI's native field for
+        # non-standard API body params). model_kwargs would put the key at the
+        # top level of create(), which the OpenAI SDK rejects.
         if disable_thinking:
-            model_kwargs = dict(kwargs.get("model_kwargs") or {})
-            model_kwargs.setdefault("enable_thinking", False)
-            kwargs["model_kwargs"] = model_kwargs
+            extra_body = dict(kwargs.get("extra_body") or {})
+            extra_body.setdefault("enable_thinking", False)
+            kwargs["extra_body"] = extra_body
         super().__init__(*args, **kwargs)
 
     def with_structured_output(self, schema, *, method=None, **kwargs):
