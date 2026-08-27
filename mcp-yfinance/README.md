@@ -12,6 +12,32 @@ A standalone MCP (Model Context Protocol) server that exposes [yfinance](https:/
 - `get_recommendations(ticker)` - recent analyst recommendations
 - `search_tickers(query)` - ticker search
 
+## Mapping to yfinance APIs
+
+| MCP Tool | yfinance API | Description |
+|----------|--------------|-------------|
+| `get_stock_price(ticker)` | `yf.Ticker(ticker).history(period="2d", interval="1d")` | Latest OHLCV + daily change |
+| `get_stock_history(ticker, ...)` | `yf.Ticker(ticker).history(...)` | Single-ticker historical OHLCV |
+| `download_stock_data(tickers, ...)` | `yf.download(tickers, ...)` | Batch/multi-ticker historical OHLCV |
+| `get_stock_info(ticker)` | `yf.Ticker(ticker).info` | Company/quote metadata |
+| `get_financials(ticker, statement)` | `yf.Ticker(ticker).financials` / `balance_sheet` / `cashflow` | Annual financial statements |
+| `get_recommendations(ticker)` | `yf.Ticker(ticker).recommendations` | Recent analyst recommendations |
+| `search_tickers(query)` | `yf.Search(query, ...)` | Ticker/company search |
+
+### TradingAgents integration mapping
+
+When replacing direct yfinance calls inside TradingAgents with this MCP server, use the following mapping:
+
+| TradingAgents usage | Replacement MCP tool |
+|---------------------|----------------------|
+| `yf.Ticker(ticker).info` | `get_stock_info(ticker)` |
+| `yf.Ticker(ticker).history(...)` | `get_stock_history(ticker, ...)` |
+| `yf.download(tickers, start=..., end=..., auto_adjust=True, ...)` | `download_stock_data(tickers, start=..., end=..., auto_adjust=True, ...)` |
+| `yf.Ticker(ticker).financials` | `get_financials(ticker, statement="income")` |
+| `yf.Ticker(ticker).balance_sheet` | `get_financials(ticker, statement="balance")` |
+| `yf.Ticker(ticker).cashflow` | `get_financials(ticker, statement="cash")` |
+| `yf.Ticker(ticker).recommendations` | `get_recommendations(ticker)` |
+
 ## Run locally
 
 ```bash
