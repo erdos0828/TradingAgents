@@ -114,8 +114,12 @@ def _get_price_history(ticker: str, cache_dir: Path, target_date: str, days: int
     """Fetch OHLCV history up to target_date from cache.
 
     If ``days`` is None, returns all available history up to ``target_date``.
+    Multiple cache files may exist; pick the one whose latest date is the
+    most recent (but still <= target_date) to avoid stale partial files.
     """
     try:
+        best_df: pd.DataFrame | None = None
+        best_max_date: str | None = None
         for f in cache_dir.glob(f"{ticker}-YFin-data-*.csv"):
             df = pd.read_csv(f)
             if df.empty or "Close" not in df.columns or "Date" not in df.columns:
@@ -127,9 +131,12 @@ def _get_price_history(ticker: str, cache_dir: Path, target_date: str, days: int
             df = df[df["Date"] <= target_date]
             if df.empty:
                 continue
-            if days is None:
-                return df.reset_index(drop=True)
-            return df.tail(days).reset_index(drop=True)
+            max_date = str(df["Date"].iloc[-1])
+            if best_max_date is None or max_date > best_max_date:
+                best_max_date = max_date
+                best_df = df if days is None else df.tail(days)
+        if best_df is not None:
+            return best_df.reset_index(drop=True)
     except Exception:
         pass
     return None
