@@ -71,6 +71,46 @@ def _find_past_report_dirs(ticker: str, reports_dir: Path, days: int) -> list[Pa
     return result
 
 
+def _recent_dates(target_date: str, days: int) -> list[str]:
+    """Return the last `days` calendar dates ending at target_date, newest first."""
+    base = datetime.strptime(target_date, "%Y-%m-%d")
+    return [(base - __import__("datetime").timedelta(days=i)).strftime("%Y-%m-%d") for i in range(days)]
+
+
+def _get_recent_signals(ticker: str, reports_dir: Path, target_date: str, days: int = 7) -> list[dict]:
+    """Return recent `days` calendar-day PM ratings for a ticker.
+
+    Each entry is {"date": "YYYY-MM-DD", "rating": "Buy"|"Sell"|"Hold"|"N/A"|"X"}.
+    Missing days are marked as "X".
+    """
+    from datetime import timedelta
+
+    ticker_dir = reports_dir / ticker
+    date_to_rating: dict[str, str] = {}
+    if ticker_dir.exists():
+        for d in ticker_dir.iterdir():
+            if not d.is_dir():
+                continue
+            date = d.name[:10]
+            if date > target_date or not _recent_dates(target_date, days).__contains__(date):
+                continue
+            complete = d / "complete_report.md"
+            if not complete.exists():
+                continue
+            try:
+                text = complete.read_text(encoding="utf-8")
+                pm = _extract_section(text, "V. Portfolio Manager Decision")
+                rating = _extract_pm_rating(pm)
+                date_to_rating[date] = rating
+            except Exception:
+                continue
+
+    result = []
+    for date in _recent_dates(target_date, days):
+        result.append({"date": date, "rating": date_to_rating.get(date, "X")})
+    return result
+
+
 def _extract_section(text: str, header: str) -> str:
     """Extract content under a markdown header."""
     pattern = rf"## {re.escape(header)}\n(.*?)(?=\n## |\n# |\Z)"
@@ -520,10 +560,112 @@ def _market_region(ticker: str) -> str:
     return "美股"
 
 
+def _build_signal_activity_html(
+    tickers: list[str],
+    reports_dir: Path,
+    target_date: str,
+    days: int = 7,
+) -> str:
+    """Build a GitHub-style activity map of recent PM ratings.
+
+    Each row is a ticker; columns are calendar days (oldest -> newest).
+    A colored cell means a signal exists for that day; 'X' means no signal.
+    """
+    if not tickers:
+        return ""
+
+    dates = _recent_dates(target_date, days)[::-1]  # oldest -> newest
+    date_labels = [d[5:] for d in dates]
+
+    rows_html: list[str] = []
+    for ticker in tickers:
+        signals = _get_recent_signals(ticker, reports_dir, target_date, days)
+        sig_by_date = {s["date"]: s["rating"] for s in signals}
+        cells: list[str] = []
+        for d in dates:
+            rating = sig_by_date.get(d, "X")
+            if rating == "X":
+                cells.append(
+                    f'<div class="activity-cell activity-empty" title="{d} 无信号">X</div>'
+                )
+            else:
+                cls = _rating_class(rating)
+                cells.append(
+                    f'<div class="activity-cell {cls}" title="{d} {html.escape(rating)}"></div>'
+                )
+        rows_html.append(
+            '<div class="activity-row">'
+            f'<div class="activity-ticker">{html.escape(ticker)}</div>'
+            + "".join(cells)
+            + "</div>"
+        )
+
+    header_cells = "".join(
+        f'<div class="activity-date">{html.escape(label)}</div>' for label in date_labels
+    )
+    return (
+        '<div class="activity-map">'
+        '<div class="activity-title">近一周信号</div>'
+        '<div class="activity-header">'
+        '<div class="activity-ticker"></div>'
+        + header_cells
+        + "</div>"
+        + "".join(rows_html)
+        + "</div>"
+    )
+
+
+def _build_region_summary_html(
+    region_df: pd.DataFrame,
+    reports_dir: Path,
+    target_date: str,
+    region_name: str,
+) -> str:
+    """Build the summary area for a market region (totals + signal activity map)."""
+    total_market_value = float(region_df["市值"].sum()) if not region_df.empty else 0.0
+    total_cost_value = float(region_df["持仓成本"].sum()) if not region_df.empty else 0.0
+    total_daily_pnl_raw = region_df["当日盈亏"].sum()
+    total_daily_pnl = float(total_daily_pnl_raw) if pd.notna(total_daily_pnl_raw) else None
+    daily_return = (
+        (total_daily_pnl / total_cost_value * 100)
+        if total_daily_pnl is not None and total_cost_value > 0
+        else None
+    )
+
+    daily_cls = _pnl_class(total_daily_pnl)
+    daily_sign = "+" if total_daily_pnl is not None and total_daily_pnl > 0 else ""
+
+    tickers = region_df["Ticker"].tolist()
+    activity_html = _build_signal_activity_html(tickers, reports_dir, target_date)
+
+    return f"""
+    <div class="region-summary">
+        <div class="region-summary-title">{html.escape(region_name)} 总体</div>
+        <div class="summary-metrics">
+            <div class="summary-metric">
+                <div class="summary-metric-label">证券市值</div>
+                <div class="summary-metric-main">{_fmt_number(total_market_value)}</div>
+            </div>
+            <div class="summary-metric">
+                <div class="summary-metric-label">持仓市值（成本）</div>
+                <div class="summary-metric-main">{_fmt_number(total_cost_value)}</div>
+            </div>
+            <div class="summary-metric {daily_cls}">
+                <div class="summary-metric-label">今日盈亏</div>
+                <div class="summary-metric-main">{daily_sign}{_fmt_number(total_daily_pnl)}</div>
+                <div class="summary-metric-sub">{daily_sign}{_fmt_number(daily_return)}%</div>
+            </div>
+        </div>
+        {activity_html}
+    </div>
+    """
+
+
 def _build_cards_html(
     df: pd.DataFrame,
     cache_dir: Path,
     target_date: str,
+    reports_dir: Path,
     report_server_url: str | None = None,
     transactions: dict[str, list[dict]] | None = None,
 ) -> str:
@@ -645,9 +787,12 @@ def _build_cards_html(
         tab_buttons.append(
             f'<button class="market-tab{active_cls}" data-target="{tab_id}" onclick="switchMarketTab(\'{tab_id}\')">{region} ({len(groups[region])})</button>'
         )
+        region_df = df[df["Ticker"].apply(_market_region) == region]
+        summary_html = _build_region_summary_html(region_df, reports_dir, target_date, region)
         tab_panels.append(
             f'<div id="{tab_id}" class="market-panel{active_cls}">\n'
-            + '<div class="holdings-list">\n'
+            + summary_html
+            + '\n<div class="holdings-list">\n'
             + "\n".join(groups[region])
             + "\n</div>\n</div>"
         )
@@ -1020,6 +1165,94 @@ def _base_styles() -> str:
             color: var(--muted);
             font-size: 13px;
         }
+        .region-summary {
+            background: var(--card-bg);
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .region-summary-title {
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--primary);
+            margin-bottom: 16px;
+        }
+        .summary-metrics {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 16px;
+            margin-bottom: 20px;
+        }
+        .summary-metric {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 4px;
+            padding: 12px 16px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+        .summary-metric-label {
+            font-size: 12px;
+            color: var(--muted);
+        }
+        .summary-metric-main {
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--text);
+        }
+        .summary-metric-sub {
+            font-size: 12px;
+            color: var(--muted);
+        }
+        .summary-metric.profit .summary-metric-main,
+        .summary-metric.profit .summary-metric-sub { color: var(--profit); }
+        .summary-metric.loss .summary-metric-main,
+        .summary-metric.loss .summary-metric-sub { color: var(--loss); }
+        .activity-map { margin-top: 4px; }
+        .activity-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--muted);
+            margin-bottom: 10px;
+        }
+        .activity-header, .activity-row {
+            display: grid;
+            grid-template-columns: 90px repeat(7, 28px);
+            gap: 6px;
+            align-items: center;
+        }
+        .activity-header { margin-bottom: 4px; }
+        .activity-ticker {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--primary);
+            text-align: right;
+            padding-right: 8px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .activity-date {
+            font-size: 11px;
+            color: var(--muted);
+            text-align: center;
+        }
+        .activity-cell {
+            width: 24px;
+            height: 24px;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+            font-weight: 700;
+        }
+        .activity-empty { background: #e2e8f0; color: #94a3b8; }
+        .activity-cell.rating-buy { background: #ffebee; color: #c62828; }
+        .activity-cell.rating-sell { background: #e8f5e9; color: #2e7d32; }
+        .activity-cell.rating-hold { background: #fff8e1; color: #f9a825; }
         @media (max-width: 900px) {
             .metrics-row { grid-template-columns: repeat(2, 1fr); }
             .summary-text { display: none; }
@@ -1042,10 +1275,11 @@ def _build_html(
     generated_at: str,
     cache_dir: Path,
     target_date: str,
+    reports_dir: Path,
     report_server_url: str | None = None,
     transactions: dict[str, list[dict]] | None = None,
 ) -> str:
-    cards_html = _build_cards_html(df, cache_dir, target_date, report_server_url, transactions)
+    cards_html = _build_cards_html(df, cache_dir, target_date, reports_dir, report_server_url, transactions)
     styles = _base_styles()
     safe_title = html.escape(title)
     safe_generated_at = html.escape(generated_at)
@@ -1167,6 +1401,7 @@ def build_summary_data(
             "成本价": cost_price,
             "最新价": latest_price,
             "股数": qty,
+            "持仓成本": cost_value,
             "市值": market_value,
             "总收益": total_pnl,
             "收益率": return_rate,
@@ -1182,7 +1417,7 @@ def build_summary_data(
     df = pd.DataFrame(rows)
     column_order = [
         "Ticker", "名称", "最新评级", "Executive Summary", "Investment Thesis",
-        "过去评级", "成本价", "最新价", "股数", "市值",
+        "过去评级", "成本价", "最新价", "股数", "持仓成本", "市值",
         "当日盈亏", "当日盈亏率", "总收益", "收益率", "报告日期", "报告目录"
     ]
     return df[column_order], errors
@@ -1224,7 +1459,7 @@ def main():
     title = f"持仓分析汇总 - {today_str}"
     generated_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     transactions = _load_transactions(Path(args.transactions))
-    html_content = _build_html(df, title, generated_at, Path(args.cache_dir), today_str, report_server_url=args.report_server_url, transactions=transactions)
+    html_content = _build_html(df, title, generated_at, Path(args.cache_dir), today_str, Path(args.reports_dir), report_server_url=args.report_server_url, transactions=transactions)
 
     output_path.write_text(html_content, encoding="utf-8")
 
