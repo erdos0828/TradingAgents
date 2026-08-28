@@ -513,6 +513,13 @@ def _rating_class(rating: str) -> str:
     return ""
 
 
+def _market_region(ticker: str) -> str:
+    """Classify a ticker into A-share or US stock based on its suffix."""
+    if ticker.endswith(".SS") or ticker.endswith(".SZ"):
+        return "A股"
+    return "美股"
+
+
 def _build_cards_html(
     df: pd.DataFrame,
     cache_dir: Path,
@@ -520,9 +527,9 @@ def _build_cards_html(
     report_server_url: str | None = None,
     transactions: dict[str, list[dict]] | None = None,
 ) -> str:
-    """Build a holdings-list card layout similar to broker portfolio apps."""
-    cards = []
-    for _, row in df.iterrows():
+    """Build a holdings-list card layout grouped by market region with tabs."""
+
+    def _card_html(row: pd.Series) -> str:
         ticker = html.escape(str(row["Ticker"]))
         name = html.escape(str(row.get("名称", ticker)))
         report_dir = html.escape(str(row["报告目录"]))
@@ -568,7 +575,7 @@ def _build_cards_html(
         if report_server_url:
             report_link = f'<a class="report-link" href="{html.escape(report_server_url)}#ticker={ticker}&date={report_dir}" target="_blank" rel="noopener">查看详细报告 →</a>'
 
-        cards.append(f"""
+        return f"""
         <div class="holding-card">
             <div class="card-header">
                 <div class="ticker-block">
@@ -617,8 +624,48 @@ def _build_cards_html(
                 </details>
             </div>
         </div>
-        """)
-    return '<div class="holdings-list">\n' + "\n".join(cards) + "\n</div>"
+        """
+
+    # Group cards by market region
+    groups: dict[str, list[str]] = {"A股": [], "美股": []}
+    for _, row in df.iterrows():
+        region = _market_region(str(row["Ticker"]))
+        groups.setdefault(region, []).append(_card_html(row))
+
+    # Preserve consistent tab order
+    region_order = [r for r in ["A股", "美股"] if groups.get(r)]
+    if not region_order:
+        region_order = list(groups.keys())
+
+    tab_buttons = []
+    tab_panels = []
+    for idx, region in enumerate(region_order):
+        active_cls = " active" if idx == 0 else ""
+        tab_id = f"tab-{region.replace('股', 'share')}"
+        tab_buttons.append(
+            f'<button class="market-tab{active_cls}" data-target="{tab_id}" onclick="switchMarketTab(\'{tab_id}\')">{region} ({len(groups[region])})</button>'
+        )
+        tab_panels.append(
+            f'<div id="{tab_id}" class="market-panel{active_cls}">\n'
+            + '<div class="holdings-list">\n'
+            + "\n".join(groups[region])
+            + "\n</div>\n</div>"
+        )
+
+    return (
+        '<div class="market-tabs">\n'
+        + "\n".join(tab_buttons)
+        + '\n</div>\n'
+        + "\n".join(tab_panels)
+        + '\n<script>\n'
+        + 'function switchMarketTab(targetId) {\n'
+        + '    document.querySelectorAll(".market-panel").forEach(function(p) { p.classList.remove("active"); });\n'
+        + '    document.querySelectorAll(".market-tab").forEach(function(t) { t.classList.remove("active"); });\n'
+        + '    document.getElementById(targetId).classList.add("active");\n'
+        + '    document.querySelector(\'.market-tab[data-target="\' + targetId + \'"]\').classList.add("active");\n'
+        + '}\n'
+        + '</script>\n'
+    )
 
 
 def _base_styles() -> str:
@@ -659,6 +706,41 @@ def _base_styles() -> str:
             display: flex;
             flex-direction: column;
             gap: 16px;
+        }
+        .market-tabs {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 20px;
+            border-bottom: 2px solid var(--border);
+            padding-bottom: 2px;
+        }
+        .market-tab {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px 8px 0 0;
+            background: transparent;
+            color: var(--muted);
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .market-tab:hover {
+            background: #eef2f7;
+            color: var(--primary);
+        }
+        .market-tab.active {
+            background: var(--card-bg);
+            color: var(--accent);
+            box-shadow: 0 -2px 8px rgba(0,0,0,0.04);
+            border-bottom: 2px solid var(--accent);
+            margin-bottom: -2px;
+        }
+        .market-panel {
+            display: none;
+        }
+        .market-panel.active {
+            display: block;
         }
         .holding-card {
             background: var(--card-bg);
