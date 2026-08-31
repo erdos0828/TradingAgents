@@ -71,60 +71,19 @@ _PAGE_TEMPLATE = """<!DOCTYPE html>
     <title>持仓分析汇总</title>
     <script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
     {{ styles | safe }}
-    <style>
-        header {
-            display: flex;
-            align-items: flex-end;
-            justify-content: space-between;
-            gap: 24px;
-            flex-wrap: wrap;
-            margin-bottom: 24px;
-            padding-bottom: 16px;
-            border-bottom: 2px solid var(--border);
-        }
-        .controls {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-        }
-        label { font-weight: 600; font-size: 14px; }
-        select {
-            padding: 8px 12px;
-            border: 1px solid var(--border);
-            border-radius: 6px;
-            font-size: 14px;
-            background: #fff;
-            min-width: 140px;
-        }
-        button {
-            padding: 8px 16px;
-            border: none;
-            border-radius: 6px;
-            background: var(--accent);
-            color: #fff;
-            font-size: 14px;
-            cursor: pointer;
-        }
-        button:hover { background: #2980b9; }
-        .empty-state {
-            text-align: center;
-            padding: 60px 20px;
-            color: var(--muted);
-            background: var(--card-bg);
-            border-radius: 12px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
-        }
-    </style>
 </head>
 <body>
     <div class="container">
-        <header>
-            <div>
-                <h1>持仓分析汇总</h1>
-                <div class="meta">动态生成 &nbsp;|&nbsp; 基于 reports/ 目录自动汇总</div>
+        <header class="page-header">
+            <div class="brand">
+                <div class="brand-mark">P</div>
+                <div class="brand-text">
+                    <h1>持仓分析汇总</h1>
+                    <div class="subtitle">Portfolio Summary · 动态生成</div>
+                </div>
             </div>
             <form class="controls" method="get" action="/">
-                <label for="date">选择日期：</label>
+                <label for="date">日期</label>
                 <select name="date" id="date">
                     {% for d in available_dates %}
                     <option value="{{ d }}" {% if d == selected_date %}selected{% endif %}>{{ d }}</option>
@@ -156,6 +115,20 @@ _PAGE_TEMPLATE = """<!DOCTYPE html>
         <div class="tooltip-body"></div>
         <div class="tooltip-summary"></div>
     </div>
+    <script>
+        (function() {
+            const cards = document.querySelectorAll('.holding-card, .region-dashboard');
+            cards.forEach((card, i) => {
+                card.style.opacity = '0';
+                card.style.transform = 'translateY(20px)';
+                card.style.transition = 'opacity 0.5s cubic-bezier(0.22, 1, 0.36, 1), transform 0.5s cubic-bezier(0.22, 1, 0.36, 1)';
+                setTimeout(() => {
+                    card.style.opacity = '1';
+                    card.style.transform = 'translateY(0)';
+                }, 60 * i);
+            });
+        })();
+    </script>
 </body>
 </html>
 """
@@ -212,7 +185,14 @@ def index():
     )
 
     transactions = _load_transactions(TRANSACTIONS_PATH)
-    cards_html = _build_cards_html(df, CACHE_DIR, selected_date, REPORT_SERVER_URL, transactions) if not df.empty else ""
+    cards_html = _build_cards_html(
+        df=df,
+        cache_dir=CACHE_DIR,
+        target_date=selected_date,
+        reports_dir=REPORTS_DIR,
+        report_server_url=REPORT_SERVER_URL,
+        transactions=transactions,
+    ) if not df.empty else ""
 
     return render_template_string(
         _PAGE_TEMPLATE,

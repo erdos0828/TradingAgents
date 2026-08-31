@@ -336,7 +336,7 @@ def _build_lightweight_chart(
     df: pd.DataFrame,
     ticker: str,
     trades: dict[str, dict] | None = None,
-    height: int = 360,
+    height: int = 320,
     cost_price: float | None = None,
 ) -> str:
     """Build a TradingView lightweight-charts candlestick chart with B/S markers.
@@ -370,7 +370,7 @@ def _build_lightweight_chart(
                     markers.append({
                         "time": date,
                         "position": "belowBar" if side == "buy" else "aboveBar",
-                        "color": "#d93025" if side == "buy" else "#188038",
+                        "color": "#e57373" if side == "buy" else "#6fc090",
                         "shape": "arrowUp" if side == "buy" else "arrowDown",
                         "text": "B" if side == "buy" else "S",
                         "size": 2,
@@ -416,20 +416,20 @@ def _build_lightweight_chart(
         '    var chart = LightweightCharts.createChart(container, {\n'
         '        width: container.clientWidth,\n'
         '        height: ' + str(height) + ',\n'
-        '        layout: { background: { color: "#ffffff" }, textColor: "#2f3542" },\n'
-        '        grid: { vertLines: { color: "#f1f5f9" }, horzLines: { color: "#f1f5f9" } },\n'
-        '        crosshair: { mode: LightweightCharts.CrosshairMode.Normal },\n'
-        '        rightPriceScale: { borderColor: "#dfe4ea" },\n'
-        '        timeScale: { borderColor: "#dfe4ea", timeVisible: false, barSpacing: 4, rightOffset: 12 },\n'
+        '        layout: { background: { color: "#ffffff" }, textColor: "#1f2328" },\n'
+        '        grid: { vertLines: { color: "rgba(0, 0, 0, 0.05)" }, horzLines: { color: "rgba(0, 0, 0, 0.05)" } },\n'
+        '        crosshair: { mode: LightweightCharts.CrosshairMode.Normal, vertLine: { color: "rgba(37, 99, 235, 0.2)" }, horzLine: { color: "rgba(37, 99, 235, 0.2)" } },\n'
+        '        rightPriceScale: { borderColor: "rgba(0, 0, 0, 0.08)" },\n'
+        '        timeScale: { borderColor: "rgba(0, 0, 0, 0.08)", timeVisible: false, barSpacing: 5, rightOffset: 12 },\n'
         '    });\n'
         '    var series = chart.addCandlestickSeries({\n'
-        '        upColor: "#d93025", downColor: "#188038",\n'
-        '        borderUpColor: "#d93025", borderDownColor: "#188038",\n'
-        '        wickUpColor: "#d93025", wickDownColor: "#188038",\n'
+        '        upColor: "#d93026", downColor: "#1e8e3e",\n'
+        '        borderUpColor: "#d93026", borderDownColor: "#1e8e3e",\n'
+        '        wickUpColor: "#d93026", wickDownColor: "#1e8e3e",\n'
         '    });\n'
         '    series.setData(' + candles_json + ');\n'
         '    series.setMarkers(' + markers_json + ');\n'
-        + ('    series.createPriceLine({ price: ' + str(float(cost_price)) + ', color: "#2563eb", lineWidth: 2, lineStyle: LightweightCharts.LineStyle.Dashed, axisLabelVisible: true, title: "成本" });\n' if has_cost else '')
+        + ('    series.createPriceLine({ price: ' + str(float(cost_price)) + ', color: "#d97706", lineWidth: 2, lineStyle: LightweightCharts.LineStyle.Dashed, axisLabelVisible: true, title: "成本" });\n' if has_cost else '')
         + '    function setDefaultRange() {\n'
         '        var data = ' + candles_json + ';\n'
         '        if (!data.length) return;\n'
@@ -544,10 +544,14 @@ def _pnl_class(value: float | None) -> str:
 
 def _rating_class(rating: str) -> str:
     text = rating.lower()
-    if "buy" in text or "overweight" in text:
+    if "buy" in text:
         return "rating-buy"
-    if "sell" in text or "underweight" in text:
+    if "overweight" in text:
+        return "rating-overweight"
+    if "sell" in text:
         return "rating-sell"
+    if "underweight" in text:
+        return "rating-underweight"
     if "hold" in text:
         return "rating-hold"
     return ""
@@ -564,53 +568,92 @@ def _build_signal_activity_html(
     tickers: list[str],
     reports_dir: Path,
     target_date: str,
-    days: int = 7,
+    days: int = 30,
+    ticker_names: dict[str, str] | None = None,
 ) -> str:
     """Build a GitHub-style activity map of recent PM ratings.
 
-    Each row is a ticker; columns are calendar days (oldest -> newest).
-    A colored cell means a signal exists for that day; 'X' means no signal.
+    Each row is a ticker; columns are calendar days (newest -> oldest).
+    A colored cell means a signal exists for that day; 'X' or unrecognized
+    ratings are shown as empty (no signal).
     """
     if not tickers:
         return ""
 
-    dates = _recent_dates(target_date, days)[::-1]  # oldest -> newest
-    date_labels = [d[5:] for d in dates]
+    ticker_names = ticker_names or {}
+    dates = _recent_dates(target_date, days)  # newest -> oldest
+    weekday_names = ["一", "二", "三", "四", "五", "六", "日"]
+    date_labels = [d[8:] for d in dates]  # show day only
 
     rows_html: list[str] = []
     for ticker in tickers:
+        display_name = html.escape(ticker_names.get(ticker, ticker))
         signals = _get_recent_signals(ticker, reports_dir, target_date, days)
         sig_by_date = {s["date"]: s["rating"] for s in signals}
         cells: list[str] = []
-        for d in dates:
+        for idx, d in enumerate(dates):
+            dt = datetime.strptime(d, "%Y-%m-%d")
+            prev_week = None
+            if idx > 0:
+                prev_dt = datetime.strptime(dates[idx - 1], "%Y-%m-%d")
+                prev_week = prev_dt.isocalendar()[:2]
+            week_start = idx > 0 and dt.isocalendar()[:2] != prev_week
+            week_cls = " week-start" if week_start else ""
             rating = sig_by_date.get(d, "X")
-            if rating == "X":
+            rating_cls = _rating_class(rating)
+            tooltip = f"{display_name} · {d} 无信号"
+            if rating == "X" or not rating_cls:
                 cells.append(
-                    f'<div class="activity-cell activity-empty" title="{d} 无信号">X</div>'
+                    f'<div class="activity-cell activity-empty{week_cls}" data-tooltip="{tooltip}"></div>'
                 )
             else:
-                cls = _rating_class(rating)
+                tooltip = f"{display_name} · {d} {html.escape(rating)}"
                 cells.append(
-                    f'<div class="activity-cell {cls}" title="{d} {html.escape(rating)}"></div>'
+                    f'<div class="activity-cell {rating_cls}{week_cls}" data-tooltip="{tooltip}"></div>'
                 )
         rows_html.append(
             '<div class="activity-row">'
-            f'<div class="activity-ticker">{html.escape(ticker)}</div>'
+            f'<div class="activity-ticker" title="{html.escape(ticker)}">{display_name}</div>'
             + "".join(cells)
             + "</div>"
         )
 
-    header_cells = "".join(
-        f'<div class="activity-date">{html.escape(label)}</div>' for label in date_labels
+    header_cells: list[str] = []
+    for idx, d in enumerate(dates):
+        dt = datetime.strptime(d, "%Y-%m-%d")
+        prev_week = None
+        if idx > 0:
+            prev_dt = datetime.strptime(dates[idx - 1], "%Y-%m-%d")
+            prev_week = prev_dt.isocalendar()[:2]
+        week_start = idx > 0 and dt.isocalendar()[:2] != prev_week
+        week_cls = " week-start" if week_start else ""
+        header_cells.append(
+            f'<div class="activity-day-col{week_cls}">'
+            f'<div class="activity-day-num">{html.escape(date_labels[idx])}</div>'
+            f'<div class="activity-day-week">{html.escape(weekday_names[dt.weekday()])}</div>'
+            '</div>'
+        )
+
+    legend_html = (
+        '<div class="activity-legend">'
+        '<span class="legend-item"><span class="legend-swatch activity-empty"></span>无信号</span>'
+        '<span class="legend-item"><span class="legend-swatch rating-buy"></span>买入</span>'
+        '<span class="legend-item"><span class="legend-swatch rating-overweight"></span>增持</span>'
+        '<span class="legend-item"><span class="legend-swatch rating-sell"></span>卖出</span>'
+        '<span class="legend-item"><span class="legend-swatch rating-underweight"></span>减持</span>'
+        '<span class="legend-item"><span class="legend-swatch rating-hold"></span>持有</span>'
+        '</div>'
     )
+
     return (
         '<div class="activity-map">'
-        '<div class="activity-title">近一周信号</div>'
+        '<div class="panel-title">近30天信号</div>'
         '<div class="activity-header">'
         '<div class="activity-ticker"></div>'
-        + header_cells
+        + "".join(header_cells)
         + "</div>"
         + "".join(rows_html)
+        + legend_html
         + "</div>"
     )
 
@@ -620,10 +663,17 @@ def _build_region_summary_html(
     reports_dir: Path,
     target_date: str,
     region_name: str,
+    total_portfolio_cost: float = 0.0,
 ) -> str:
-    """Build the summary area for a market region (totals + signal activity map)."""
+    """Build the executive dashboard summary for a market region."""
     total_market_value = float(region_df["市值"].sum()) if not region_df.empty else 0.0
     total_cost_value = float(region_df["持仓成本"].sum()) if not region_df.empty else 0.0
+    total_pnl_raw = region_df["总收益"].sum()
+    total_pnl = float(total_pnl_raw) if pd.notna(total_pnl_raw) else None
+    total_return = (total_pnl / total_cost_value * 100) if total_pnl is not None and total_cost_value > 0 else None
+    total_cls = _pnl_class(total_pnl)
+    total_sign = "+" if total_pnl is not None and total_pnl > 0 else ""
+
     total_daily_pnl_raw = region_df["当日盈亏"].sum()
     total_daily_pnl = float(total_daily_pnl_raw) if pd.notna(total_daily_pnl_raw) else None
     daily_return = (
@@ -631,35 +681,59 @@ def _build_region_summary_html(
         if total_daily_pnl is not None and total_cost_value > 0
         else None
     )
-
     daily_cls = _pnl_class(total_daily_pnl)
     daily_sign = "+" if total_daily_pnl is not None and total_daily_pnl > 0 else ""
 
+    region_weight = (
+        (total_cost_value / total_portfolio_cost * 100)
+        if total_portfolio_cost > 0
+        else None
+    )
+
     tickers = region_df["Ticker"].tolist()
-    activity_html = _build_signal_activity_html(tickers, reports_dir, target_date)
+    ticker_names = dict(zip(region_df["Ticker"], region_df["名称"])) if "名称" in region_df.columns else {}
+    activity_html = _build_signal_activity_html(tickers, reports_dir, target_date, ticker_names=ticker_names)
 
     return f"""
-    <div class="region-summary">
-        <div class="region-summary-title">{html.escape(region_name)} 总体</div>
-        <div class="summary-metrics">
-            <div class="summary-metric">
-                <div class="summary-metric-label">证券市值</div>
-                <div class="summary-metric-main">{_fmt_number(total_market_value)}</div>
-            </div>
-            <div class="summary-metric">
-                <div class="summary-metric-label">持仓市值（成本）</div>
-                <div class="summary-metric-main">{_fmt_number(total_cost_value)}</div>
-            </div>
-            <div class="summary-metric {daily_cls}">
-                <div class="summary-metric-label">今日盈亏</div>
-                <div class="summary-metric-main">{daily_sign}{_fmt_number(total_daily_pnl)}</div>
-                <div class="summary-metric-sub">{daily_sign}{_fmt_number(daily_return)}%</div>
+    <div class="region-dashboard">
+        <div class="kpi-panel">
+            <div class="panel-title">{html.escape(region_name)} 概览</div>
+            <div class="kpi-grid">
+                <div class="kpi">
+                    <div class="kpi-label">证券市值</div>
+                    <div class="kpi-value">{_fmt_number(total_market_value)}</div>
+                </div>
+                <div class="kpi">
+                    <div class="kpi-label">持仓成本</div>
+                    <div class="kpi-value">{_fmt_number(total_cost_value)}</div>
+                </div>
+                <div class="kpi {daily_cls}">
+                    <div class="kpi-label">今日盈亏</div>
+                    <div class="kpi-value">{daily_sign}{_fmt_number(total_daily_pnl)}</div>
+                    <div class="kpi-change">{daily_sign}{_fmt_number(daily_return)}%</div>
+                </div>
+                <div class="kpi {total_cls}">
+                    <div class="kpi-label">累计盈亏</div>
+                    <div class="kpi-value">{total_sign}{_fmt_number(total_pnl)}</div>
+                    <div class="kpi-change">{total_sign}{_fmt_number(total_return)}%</div>
+                </div>
+                <div class="kpi">
+                    <div class="kpi-label">持仓数量</div>
+                    <div class="kpi-value">{len(region_df)}</div>
+                    <div class="kpi-change">只标的</div>
+                </div>
+                <div class="kpi">
+                    <div class="kpi-label">组合权重</div>
+                    <div class="kpi-value">{_fmt_number(region_weight, 1)}%</div>
+                    <div class="kpi-change">占全仓成本</div>
+                </div>
             </div>
         </div>
-        {activity_html}
+        <div class="signal-panel">
+            {activity_html}
+        </div>
     </div>
     """
-
 
 def _build_cards_html(
     df: pd.DataFrame,
@@ -715,56 +789,56 @@ def _build_cards_html(
 
         report_link = ""
         if report_server_url:
-            report_link = f'<a class="report-link" href="{html.escape(report_server_url)}#ticker={ticker}&date={report_dir}" target="_blank" rel="noopener">查看详细报告 →</a>'
+            report_link = f'<a class="report-link" href="{html.escape(report_server_url)}#ticker={ticker}&date={report_dir}" target="_blank" rel="noopener">Report →</a>'
 
         return f"""
         <div class="holding-card">
             <div class="card-header">
-                <div class="ticker-block">
-                    <div class="ticker-name-block">
-                        <div class="ticker-name">{name}</div>
-                        <div class="ticker-code">{ticker}</div>
-                    </div>
-                    <span class="rating-tag {rating_cls}">{rating}</span>
+                <div class="identity">
+                    <div class="ticker-name">{name}</div>
+                    <div class="ticker-code">{ticker}</div>
                 </div>
-                <div class="header-right">
-                    <div class="past-ratings-header">{past_tags}</div>
+                <div class="card-actions">
+                    <span class="rating-tag {rating_cls}">{rating}</span>
                     {report_link}
                 </div>
             </div>
-            <div class="metrics-row">
-                <div class="metric">
-                    <div class="metric-label">市值 / 数量</div>
-                    <div class="metric-main">{market_value}</div>
-                    <div class="metric-sub">{qty} 股</div>
+            <div class="card-body">
+                <div class="card-metrics">
+                    <div class="metric">
+                        <div class="metric-label">市值 / 数量</div>
+                        <div class="metric-value">{market_value}</div>
+                        <div class="metric-note">{qty} 股</div>
+                    </div>
+                    <div class="metric">
+                        <div class="metric-label">现价 / 成本</div>
+                        <div class="metric-value">{latest}</div>
+                        <div class="metric-note">{cost}</div>
+                    </div>
+                    <div class="metric {daily_cls}">
+                        <div class="metric-label">当日盈亏</div>
+                        <div class="metric-value">{sign_daily}{daily_pnl}</div>
+                        <div class="metric-note">{sign_daily}{daily_ret}%</div>
+                    </div>
+                    <div class="metric {total_cls}">
+                        <div class="metric-label">持仓盈亏</div>
+                        <div class="metric-value">{sign_total}{total_pnl}</div>
+                        <div class="metric-note">{sign_total}{total_ret}%</div>
+                    </div>
                 </div>
-                <div class="metric">
-                    <div class="metric-label">现价 / 成本</div>
-                    <div class="metric-main">{latest}</div>
-                    <div class="metric-sub">{cost}</div>
-                </div>
-                <div class="metric {daily_cls}">
-                    <div class="metric-label">当日盈亏</div>
-                    <div class="metric-main">{sign_daily}{daily_pnl}</div>
-                    <div class="metric-sub">{sign_daily}{daily_ret}%</div>
-                </div>
-                <div class="metric {total_cls}">
-                    <div class="metric-label">持仓盈亏</div>
-                    <div class="metric-main">{sign_total}{total_pnl}</div>
-                    <div class="metric-sub">{sign_total}{total_ret}%</div>
-                </div>
+                <div class="past-ratings">{past_tags}</div>
             </div>
-            <div class="card-details">
-                <details>
-                    <summary>投资建议 &amp; 走势</summary>
-                    <div class="detail-section">
-                        <strong>投资建议</strong>
+            <details class="card-analysis">
+                <summary>投资建议 &amp; 走势</summary>
+                <div class="analysis-body">
+                    <div class="analysis-section">
+                        <div class="analysis-section-title">投资建议</div>
                         <p class="investment-summary">{summary}</p>
                         <p>{thesis}</p>
                     </div>
-                    {f'<div class="detail-section"><strong>历史走势</strong>{candlestick_html}</div>' if candlestick_html else ''}
-                </details>
-            </div>
+                    {f'<div class="analysis-section"><div class="analysis-section-title">历史走势</div>{candlestick_html}</div>' if candlestick_html else ''}
+                </div>
+            </details>
         </div>
         """
 
@@ -773,6 +847,8 @@ def _build_cards_html(
     for _, row in df.iterrows():
         region = _market_region(str(row["Ticker"]))
         groups.setdefault(region, []).append(_card_html(row))
+
+    total_portfolio_cost = float(df["持仓成本"].sum()) if not df.empty else 0.0
 
     # Preserve consistent tab order
     region_order = [r for r in ["A股", "美股"] if groups.get(r)]
@@ -788,13 +864,15 @@ def _build_cards_html(
             f'<button class="market-tab{active_cls}" data-target="{tab_id}" onclick="switchMarketTab(\'{tab_id}\')">{region} ({len(groups[region])})</button>'
         )
         region_df = df[df["Ticker"].apply(_market_region) == region]
-        summary_html = _build_region_summary_html(region_df, reports_dir, target_date, region)
+        summary_html = _build_region_summary_html(region_df, reports_dir, target_date, region, total_portfolio_cost)
         tab_panels.append(
             f'<div id="{tab_id}" class="market-panel{active_cls}">\n'
             + summary_html
-            + '\n<div class="holdings-list">\n'
+            + '\n<div class="holdings-section">\n'
+            + f'<div class="section-header"><h2 class="section-title">持仓明细</h2><span class="section-count">{len(groups[region])} 只标的</span></div>\n'
+            + '<div class="holdings-grid">\n'
             + "\n".join(groups[region])
-            + "\n</div>\n</div>"
+            + "\n</div>\n</div>\n</div>"
         )
 
     return (
@@ -816,454 +894,844 @@ def _build_cards_html(
 def _base_styles() -> str:
     return """
     <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+
         :root {
-            --bg-color: #f5f7fa;
-            --card-bg: #ffffff;
-            --primary: #2c3e50;
-            --accent: #3498db;
-            --border: #dfe4ea;
-            --text: #2f3542;
-            --muted: #747d8c;
-            --profit: #d93025;
-            --loss: #188038;
-            --neutral: #5f6368;
+            --bg: #f6f7f9;
+            --bg-elevated: #ffffff;
+            --bg-card: #ffffff;
+            --bg-hover: #f0f1f5;
+            --border: rgba(0, 0, 0, 0.08);
+            --border-strong: rgba(0, 0, 0, 0.16);
+            --text: #1f2328;
+            --text-secondary: #4a4f57;
+            --text-muted: #8b949e;
+            --accent: #2563eb;
+            --accent-bright: #1d4ed8;
+            --profit: #d93026;
+            --loss: #1e8e3e;
+            --neutral: #9aa0a6;
+            --shadow: 0 4px 24px rgba(0, 0, 0, 0.06);
+            --radius: 12px;
+            --radius-sm: 8px;
+            --font-display: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            --font-body: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            --font-mono: 'JetBrains Mono', ui-monospace, monospace;
         }
+
         * { box-sizing: border-box; }
+
+        html { scroll-behavior: smooth; }
+
         body {
             margin: 0;
-            padding: 24px;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-            background-color: var(--bg-color);
+            padding: 0;
+            font-family: var(--font-body);
+            background: var(--bg);
             color: var(--text);
+            min-height: 100vh;
+            -webkit-font-smoothing: antialiased;
         }
+
         .container {
-            max-width: 1200px;
+            max-width: 1400px;
             margin: 0 auto;
+            padding: 28px 32px 40px;
         }
-        header {
-            margin-bottom: 24px;
-            padding-bottom: 16px;
-            border-bottom: 2px solid var(--border);
+
+        /* Header */
+        .page-header {
+            display: grid;
+            grid-template-columns: 1fr auto;
+            gap: 24px;
+            align-items: end;
+            padding-bottom: 24px;
+            margin-bottom: 28px;
+            border-bottom: 1px solid var(--border);
         }
-        h1 { margin: 0 0 8px 0; font-size: 28px; color: var(--primary); }
-        .meta { color: var(--muted); font-size: 14px; }
-        .holdings-list {
+
+        .brand {
             display: flex;
-            flex-direction: column;
+            align-items: center;
             gap: 16px;
         }
-        .market-tabs {
-            display: flex;
-            gap: 8px;
-            margin-bottom: 20px;
-            border-bottom: 2px solid var(--border);
-            padding-bottom: 2px;
+
+        .brand-mark {
+            width: 44px;
+            height: 44px;
+            border-radius: 12px;
+            background: var(--accent);
+            display: grid;
+            place-items: center;
+            color: #ffffff;
+            font-family: var(--font-display);
+            font-size: 22px;
+            font-weight: 700;
+            box-shadow: 0 6px 16px rgba(37, 99, 235, 0.22);
         }
-        .market-tab {
-            padding: 10px 20px;
-            border: none;
-            border-radius: 8px 8px 0 0;
-            background: transparent;
-            color: var(--muted);
-            font-size: 15px;
+
+        .brand-text h1 {
+            margin: 0;
+            font-family: var(--font-display);
+            font-size: 28px;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            line-height: 1.15;
+            color: var(--text);
+        }
+
+        .brand-text .subtitle {
+            margin-top: 4px;
+            font-family: var(--font-mono);
+            font-size: 11px;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            color: var(--text-muted);
+        }
+
+        .controls {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 6px;
+            background: var(--bg-elevated);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            box-shadow: var(--shadow);
+        }
+
+        .controls label {
+            font-family: var(--font-mono);
+            font-size: 10px;
             font-weight: 600;
+            color: var(--text-muted);
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            padding-left: 8px;
+        }
+
+        .controls select {
+            padding: 9px 12px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            font-family: var(--font-mono);
+            font-size: 13px;
+            color: var(--text);
+            background: var(--bg-card);
+            min-width: 140px;
+            cursor: pointer;
+            outline: none;
+            transition: all 0.2s ease;
+        }
+
+        .controls select:hover, .controls select:focus {
+            border-color: var(--accent);
+        }
+
+        .controls button {
+            padding: 9px 18px;
+            border: 1px solid var(--accent);
+            border-radius: 8px;
+            background: var(--accent);
+            color: #ffffff;
+            font-family: var(--font-mono);
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
             cursor: pointer;
             transition: all 0.2s ease;
         }
+
+        .controls button:hover {
+            background: var(--accent-bright);
+            border-color: var(--accent-bright);
+        }
+
+        /* Market tabs */
+        .market-tabs {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 24px;
+        }
+
+        .market-tab {
+            padding: 10px 22px;
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            background: var(--bg-elevated);
+            color: var(--text-secondary);
+            font-family: var(--font-mono);
+            font-size: 12px;
+            font-weight: 600;
+            letter-spacing: 0.04em;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
         .market-tab:hover {
-            background: #eef2f7;
-            color: var(--primary);
+            border-color: var(--border-strong);
+            color: var(--text);
+            background: var(--bg-hover);
         }
+
         .market-tab.active {
-            background: var(--card-bg);
-            color: var(--accent);
-            box-shadow: 0 -2px 8px rgba(0,0,0,0.04);
-            border-bottom: 2px solid var(--accent);
-            margin-bottom: -2px;
+            background: var(--accent);
+            border-color: var(--accent);
+            color: #ffffff;
         }
+
         .market-panel {
             display: none;
+            animation: fadeUp 0.4s cubic-bezier(0.22, 1, 0.36, 1) forwards;
         }
-        .market-panel.active {
-            display: block;
+
+        .market-panel.active { display: block; }
+
+        @keyframes fadeUp {
+            from { opacity: 0; transform: translateY(16px); }
+            to { opacity: 1; transform: translateY(0); }
         }
+
+        /* Region dashboard */
+        .region-dashboard {
+            display: grid;
+            grid-template-columns: 1fr 1.2fr;
+            gap: 20px;
+            margin-bottom: 32px;
+        }
+
+        .kpi-panel, .signal-panel {
+            min-width: 0;
+            background: var(--bg-elevated);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 24px;
+            box-shadow: var(--shadow);
+        }
+
+        .panel-title {
+            font-family: var(--font-mono);
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            margin-bottom: 16px;
+        }
+
+        .kpi-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 16px;
+        }
+
+        .kpi {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            padding: 12px;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            min-width: 0;
+        }
+
+        .kpi-label {
+            font-family: var(--font-mono);
+            font-size: 10px;
+            font-weight: 600;
+            color: var(--text-muted);
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+        }
+
+        .kpi-value {
+            font-family: var(--font-mono);
+            font-size: clamp(13px, 1.2vw, 18px);
+            font-weight: 600;
+            color: var(--text);
+            letter-spacing: -0.02em;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .kpi-change {
+            font-family: var(--font-mono);
+            font-size: 12px;
+            font-weight: 500;
+            color: var(--text-muted);
+        }
+
+        .kpi.profit .kpi-value,
+        .kpi.profit .kpi-change { color: var(--profit); }
+
+        .kpi.loss .kpi-value,
+        .kpi.loss .kpi-change { color: var(--loss); }
+
+        .activity-map {
+            overflow-x: auto;
+            padding-bottom: 8px;
+        }
+
+        .activity-header, .activity-row {
+            display: grid;
+            grid-template-columns: 80px repeat(30, 16px);
+            gap: 3px;
+            align-items: center;
+        }
+
+        .activity-header {
+            margin-bottom: 8px;
+            align-items: end;
+            min-height: 30px;
+        }
+
+        .activity-ticker {
+            font-family: var(--font-body);
+            font-size: 12px;
+            font-weight: 500;
+            color: var(--text-secondary);
+            text-align: left;
+            padding-right: 10px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .activity-day-col {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-end;
+            gap: 2px;
+            line-height: 1;
+            text-align: center;
+            padding-bottom: 2px;
+        }
+
+        .activity-day-col.week-start::before,
+        .activity-cell.week-start::before {
+            content: "";
+            position: absolute;
+            left: -2px;
+            top: 0;
+            bottom: 0;
+            width: 1px;
+            background: var(--border-strong);
+        }
+
+        .activity-day-num {
+            font-family: var(--font-mono);
+            font-size: 8px;
+            color: var(--text-secondary);
+        }
+
+        .activity-day-week {
+            font-family: var(--font-mono);
+            font-size: 8px;
+            color: var(--text-muted);
+        }
+
+        .activity-cell {
+            position: relative;
+            width: 14px;
+            height: 14px;
+            border-radius: 3px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.15s ease;
+            cursor: help;
+        }
+
+        .activity-cell:hover { transform: scale(1.15); z-index: 10; }
+
+        .activity-cell::after {
+            content: attr(data-tooltip);
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%) translateY(-4px);
+            padding: 5px 8px;
+            background: rgba(31, 35, 40, 0.95);
+            color: #f6f7f9;
+            font-family: var(--font-mono);
+            font-size: 10px;
+            white-space: nowrap;
+            border-radius: 5px;
+            pointer-events: none;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.15s ease, visibility 0.15s ease;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            z-index: 100;
+        }
+
+        .activity-cell:hover::after {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .activity-empty,
+        .legend-swatch.activity-empty {
+            background: #e8eaed;
+            border: 1px solid rgba(0, 0, 0, 0.04);
+        }
+
+        .activity-cell.rating-buy,
+        .legend-swatch.rating-buy {
+            background: rgba(217, 48, 38, 0.9);
+            border: 1px solid rgba(217, 48, 38, 0.25);
+        }
+
+        .activity-cell.rating-overweight,
+        .legend-swatch.rating-overweight {
+            background: rgba(239, 68, 68, 0.75);
+            border: 1px solid rgba(239, 68, 68, 0.25);
+        }
+
+        .activity-cell.rating-sell,
+        .legend-swatch.rating-sell {
+            background: rgba(30, 142, 62, 0.9);
+            border: 1px solid rgba(30, 142, 62, 0.25);
+        }
+
+        .activity-cell.rating-underweight,
+        .legend-swatch.rating-underweight {
+            background: rgba(74, 222, 128, 0.8);
+            border: 1px solid rgba(74, 222, 128, 0.25);
+        }
+
+        .activity-cell.rating-hold,
+        .legend-swatch.rating-hold {
+            background: rgba(245, 158, 11, 0.9);
+            border: 1px solid rgba(245, 158, 11, 0.25);
+        }
+
+        .activity-legend {
+            display: flex;
+            justify-content: flex-end;
+            gap: 14px;
+            margin-top: 14px;
+            font-family: var(--font-body);
+            font-size: 11px;
+            color: var(--text-secondary);
+            flex-wrap: wrap;
+        }
+
+        .legend-item {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .legend-swatch {
+            width: 11px;
+            height: 11px;
+            border-radius: 2px;
+        }
+
+        /* Holdings section */
+        .section-header {
+            display: flex;
+            align-items: baseline;
+            justify-content: space-between;
+            margin-bottom: 18px;
+        }
+
+        .section-title {
+            font-family: var(--font-display);
+            font-size: 22px;
+            font-weight: 700;
+            margin: 0;
+            letter-spacing: -0.01em;
+            color: var(--text);
+        }
+
+        .section-count {
+            font-family: var(--font-mono);
+            font-size: 12px;
+            color: var(--text-muted);
+            letter-spacing: 0.04em;
+        }
+
+        .holdings-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 20px;
+        }
+
         .holding-card {
-            background: var(--card-bg);
-            border-radius: 12px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
-            padding: 20px;
+            background: var(--bg-elevated);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            overflow: hidden;
+            transition: all 0.25s ease;
+            box-shadow: var(--shadow);
         }
+
+        .holding-card:hover {
+            border-color: var(--border-strong);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            transform: translateY(-2px);
+        }
+
         .card-header {
             display: flex;
             align-items: flex-start;
             justify-content: space-between;
             gap: 16px;
-            margin-bottom: 16px;
+            padding: 20px 22px;
+            background: var(--bg-card);
+            border-bottom: 1px solid var(--border);
         }
-        .ticker-block {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            flex-shrink: 0;
-        }
-        .ticker-name-block {
+
+        .identity {
             display: flex;
             flex-direction: column;
-            gap: 2px;
+            gap: 3px;
         }
+
         .ticker-name {
+            font-family: var(--font-display);
             font-size: 22px;
-            font-weight: 700;
-            color: var(--primary);
-            line-height: 1.2;
-        }
-        .ticker-code {
-            font-size: 13px;
-            color: var(--muted);
-            font-weight: 500;
-        }
-        .rating-tag {
-            display: inline-block;
-            padding: 3px 10px;
-            border-radius: 12px;
-            font-size: 12px;
             font-weight: 600;
-            background: #e2e8f0;
-            color: var(--primary);
+            color: var(--text);
+            letter-spacing: -0.01em;
         }
-        .rating-tag.rating-buy, .rating-tag.rating-overweight { background: #ffebee; color: #c62828; }
-        .rating-tag.rating-sell, .rating-tag.rating-underweight { background: #e8f5e9; color: #2e7d32; }
-        .rating-tag.rating-hold { background: #fff8e1; color: #f9a825; }
-        .header-right {
+
+        .ticker-code {
+            font-family: var(--font-mono);
+            font-size: 11px;
+            color: var(--text-muted);
+            letter-spacing: 0.05em;
+        }
+
+        .card-actions {
             display: flex;
             flex-direction: column;
             align-items: flex-end;
             gap: 8px;
-            max-width: 65%;
         }
-        .report-link {
+
+        .rating-tag {
             display: inline-flex;
             align-items: center;
-            gap: 4px;
             padding: 4px 10px;
-            border-radius: 8px;
-            font-size: 12px;
-            font-weight: 500;
-            color: var(--accent);
-            background: #eff6ff;
-            border: 1px solid #bfdbfe;
-            text-decoration: none;
-            transition: all 0.2s ease;
-        }
-        .report-link:hover {
-            background: #dbeafe;
-            border-color: #93c5fd;
-            transform: translateY(-1px);
-        }
-        .past-ratings-header {
-            display: flex;
-            flex-wrap: wrap;
-            justify-content: flex-end;
-            gap: 6px;
-        }
-        .past-tag {
-            display: inline-block;
-            padding: 3px 10px;
-            border-radius: 12px;
-            font-size: 11px;
-            font-weight: 500;
-            background: #f1f5f9;
-            color: var(--muted);
+            border-radius: 6px;
+            font-family: var(--font-mono);
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            background: var(--bg-hover);
+            color: var(--text-secondary);
             border: 1px solid var(--border);
-            white-space: nowrap;
-            transition: all 0.2s ease;
         }
-        .past-tag.rating-buy, .past-tag.rating-overweight { background: #ffebee; color: #c62828; border-color: #ffcdd2; }
-        .past-tag.rating-sell, .past-tag.rating-underweight { background: #e8f5e9; color: #2e7d32; border-color: #c8e6c9; }
-        .past-tag.rating-hold { background: #fff8e1; color: #f9a825; border-color: #ffecb3; }
-        .past-tag:hover { transform: translateY(-1px); box-shadow: 0 2px 4px rgba(0,0,0,0.08); }
-        .summary-text {
-            color: var(--muted);
-            font-size: 13px;
-            line-height: 1.5;
-            text-align: right;
+
+        .rating-tag.rating-buy, .rating-tag.rating-overweight {
+            background: rgba(217, 48, 38, 0.10);
+            color: #b3261e;
+            border-color: rgba(217, 48, 38, 0.2);
         }
-        .metrics-row {
+
+        .rating-tag.rating-sell, .rating-tag.rating-underweight {
+            background: rgba(30, 142, 62, 0.10);
+            color: #137333;
+            border-color: rgba(30, 142, 62, 0.2);
+        }
+
+        .rating-tag.rating-hold {
+            background: rgba(245, 158, 11, 0.10);
+            color: #b45309;
+            border-color: rgba(245, 158, 11, 0.2);
+        }
+
+        .report-link {
+            font-family: var(--font-mono);
+            font-size: 10px;
+            font-weight: 600;
+            color: var(--accent);
+            text-decoration: none;
+            letter-spacing: 0.04em;
+            transition: color 0.2s ease;
+        }
+
+        .report-link:hover { color: var(--accent-bright); }
+
+        .card-body {
+            padding: 18px 22px;
+        }
+
+        .card-metrics {
             display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 16px;
-            padding: 16px 0;
-            border-top: 1px solid var(--border);
-            border-bottom: 1px solid var(--border);
+            grid-template-columns: repeat(2, 1fr);
+            gap: 14px;
+            margin-bottom: 16px;
         }
+
         .metric {
             display: flex;
             flex-direction: column;
-            align-items: flex-end;
             gap: 4px;
         }
+
         .metric-label {
-            font-size: 12px;
-            color: var(--muted);
+            font-family: var(--font-mono);
+            font-size: 9px;
+            font-weight: 600;
+            color: var(--text-muted);
+            letter-spacing: 0.07em;
+            text-transform: uppercase;
         }
-        .metric-main {
-            font-size: 22px;
-            font-weight: 700;
+
+        .metric-value {
+            font-family: var(--font-mono);
+            font-size: 17px;
+            font-weight: 600;
             color: var(--text);
+            letter-spacing: -0.01em;
         }
-        .metric-sub {
-            font-size: 13px;
-            color: var(--muted);
+
+        .metric-note {
+            font-family: var(--font-mono);
+            font-size: 11px;
+            color: var(--text-muted);
         }
-        .metric.profit .metric-main,
-        .metric.profit .metric-sub { color: var(--profit); }
-        .metric.loss .metric-main,
-        .metric.loss .metric-sub { color: var(--loss); }
-        .card-details {
-            margin-top: 16px;
+
+        .metric.profit .metric-value,
+        .metric.profit .metric-note { color: var(--profit); }
+
+        .metric.loss .metric-value,
+        .metric.loss .metric-note { color: var(--loss); }
+
+        .past-ratings {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            padding-top: 14px;
+            border-top: 1px solid var(--border);
         }
-        .card-details details {
-            font-size: 13px;
-            color: var(--muted);
+
+        .past-tag {
+            display: inline-flex;
+            align-items: center;
+            padding: 3px 8px;
+            border-radius: 5px;
+            font-family: var(--font-mono);
+            font-size: 9px;
+            font-weight: 600;
+            letter-spacing: 0.04em;
+            background: var(--bg-hover);
+            color: var(--text-muted);
+            border: 1px solid var(--border);
         }
-        .card-details summary {
+
+        .past-tag.rating-buy, .past-tag.rating-overweight {
+            background: rgba(217, 48, 38, 0.08);
+            color: #b3261e;
+            border-color: rgba(217, 48, 38, 0.15);
+        }
+
+        .past-tag.rating-sell, .past-tag.rating-underweight {
+            background: rgba(30, 142, 62, 0.08);
+            color: #137333;
+            border-color: rgba(30, 142, 62, 0.15);
+        }
+
+        .past-tag.rating-hold {
+            background: rgba(245, 158, 11, 0.08);
+            color: #b45309;
+            border-color: rgba(245, 158, 11, 0.12);
+        }
+
+        .card-analysis {
+            border-top: 1px solid var(--border);
+            background: var(--bg-card);
+        }
+
+        .card-analysis summary {
             cursor: pointer;
+            padding: 14px 22px;
+            font-family: var(--font-mono);
+            font-size: 11px;
             font-weight: 600;
+            letter-spacing: 0.06em;
             color: var(--accent);
+            list-style: none;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            transition: color 0.2s ease;
         }
-        .detail-section {
-            margin-top: 12px;
-            padding: 12px;
-            background: #f8f9fa;
-            border-radius: 8px;
+
+        .card-analysis summary::-webkit-details-marker { display: none; }
+
+        .card-analysis summary::after {
+            content: '+';
+            font-size: 16px;
+            font-weight: 400;
+            transition: transform 0.2s ease;
         }
-        .detail-section p {
-            margin: 6px 0 0 0;
-            line-height: 1.6;
-            color: var(--text);
+
+        .card-analysis[open] summary::after { transform: rotate(45deg); }
+
+        .card-analysis summary:hover { color: var(--accent-bright); }
+
+        .analysis-body {
+            padding: 0 22px 22px;
         }
-        .past-ratings { white-space: nowrap; }
+
+        .analysis-section {
+            margin-bottom: 18px;
+        }
+
+        .analysis-section:last-child { margin-bottom: 0; }
+
+        .analysis-section-title {
+            font-family: var(--font-mono);
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 0.07em;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            margin-bottom: 10px;
+        }
+
+        .analysis-section p {
+            margin: 0;
+            line-height: 1.7;
+            color: var(--text-secondary);
+            font-size: 13px;
+        }
+
         .investment-summary {
-            font-weight: 600;
-            color: var(--primary);
-            margin-bottom: 12px;
-            padding-bottom: 12px;
-            border-bottom: 1px dashed var(--border);
+            color: var(--text);
+            font-weight: 500;
+            margin-bottom: 10px;
         }
+
+        /* Chart */
         .lightweight-chart {
             position: relative;
             width: 100%;
-            height: 360px;
-            margin-top: 10px;
-            background: #ffffff;
-            border-radius: 6px;
-        }
-        .trade-markers-overlay {
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            pointer-events: none;
+            height: 320px;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
             overflow: hidden;
-            z-index: 10;
         }
-        .trade-marker-custom {
-            position: absolute;
-            width: 18px;
-            height: 18px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 10px;
-            font-weight: 700;
-            color: #fff;
-            pointer-events: auto;
-            cursor: pointer;
-            transition: transform 0.15s ease;
-            z-index: 11;
-        }
-        .trade-marker-buy {
-            background: #d93025;
-            border: 1.5px solid #fff;
-            box-shadow: 0 1px 3px rgba(217, 48, 37, 0.35);
-        }
-        .trade-marker-sell {
-            background: #188038;
-            border: 1.5px solid #fff;
-            box-shadow: 0 1px 3px rgba(24, 128, 56, 0.35);
-        }
-        .trade-marker-custom:hover {
-            transform: scale(1.25);
-            z-index: 20;
-        }
-        .candlestick-chart {
-            width: 100%;
-            height: 180px;
-            margin-top: 10px;
-            background: #ffffff;
-            border-radius: 6px;
-        }
-        .trade-marker { cursor: pointer; }
-        .trade-marker:hover circle { stroke: var(--accent); stroke-width: 2.5; }
-        .chart-tooltip {
-            position: absolute;
-            display: none;
-        }
+
         .trade-tooltip {
             display: none;
-            background: rgba(15, 23, 42, 0.95);
-            color: #e2e8f0;
+            position: absolute;
+            background: rgba(31, 35, 40, 0.96);
+            color: #f6f7f9;
             padding: 12px 16px;
-            border-radius: 8px;
-            font-size: 13px;
+            border-radius: var(--radius-sm);
+            font-family: var(--font-mono);
+            font-size: 11px;
             z-index: 1000;
-            max-width: 280px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+            max-width: 260px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.2);
             pointer-events: none;
             line-height: 1.5;
         }
+
         .trade-tooltip .tooltip-title {
+            font-family: var(--font-body);
             font-weight: 600;
             margin-bottom: 8px;
-            border-bottom: 1px solid #334155;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
             padding-bottom: 6px;
-            color: #fff;
+            color: #93c5fd;
+            font-size: 12px;
         }
+
         .trade-tooltip .tooltip-row {
             display: flex;
             justify-content: space-between;
-            gap: 16px;
+            gap: 18px;
             margin: 2px 0;
         }
-        .trade-tooltip .side-buy { color: #ff6b6b; }
-        .trade-tooltip .side-sell { color: #51cf66; }
+
+        .trade-tooltip .side-buy { color: #ff9aa2; }
+        .trade-tooltip .side-sell { color: #a8e6cf; }
+
         .trade-tooltip .tooltip-summary {
             margin-top: 8px;
             padding-top: 6px;
-            border-top: 1px solid #334155;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
             font-weight: 600;
-            color: #fff;
+            color: #f6f7f9;
         }
+
         .trade-tooltip .ohlc-row {
             display: flex;
             justify-content: space-between;
-            gap: 16px;
+            gap: 18px;
             margin: 2px 0;
-            font-size: 12px;
+            font-size: 10px;
         }
-        .trade-tooltip .ohlc-row span:first-child { color: #94a3b8; }
+
+        .trade-tooltip .ohlc-row span:first-child { color: #9aa0a6; }
+
         .trade-tooltip .tooltip-body {
             margin-top: 8px;
             padding-top: 6px;
-            border-top: 1px solid #334155;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
         }
+
+        /* Footer & empty */
         footer {
-            margin-top: 24px;
+            margin-top: 48px;
+            padding-top: 24px;
+            border-top: 1px solid var(--border);
             text-align: center;
-            color: var(--muted);
+            color: var(--text-muted);
+            font-family: var(--font-mono);
+            font-size: 10px;
+            letter-spacing: 0.06em;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 80px 24px;
+            color: var(--text-muted);
+            background: var(--bg-elevated);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            font-family: var(--font-mono);
             font-size: 13px;
         }
-        .region-summary {
-            background: var(--card-bg);
-            border-radius: 12px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
-            padding: 20px;
-            margin-bottom: 20px;
+
+        @media (max-width: 1100px) {
+            .region-dashboard { grid-template-columns: 1fr; }
+            .holdings-grid { grid-template-columns: 1fr; }
+            .kpi-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+            .kpi-value { font-size: 22px; }
         }
-        .region-summary-title {
-            font-size: 18px;
-            font-weight: 700;
-            color: var(--primary);
-            margin-bottom: 16px;
-        }
-        .summary-metrics {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-            gap: 16px;
-            margin-bottom: 20px;
-        }
-        .summary-metric {
-            display: flex;
-            flex-direction: column;
-            align-items: flex-end;
-            gap: 4px;
-            padding: 12px 16px;
-            background: #f8f9fa;
-            border-radius: 8px;
-        }
-        .summary-metric-label {
-            font-size: 12px;
-            color: var(--muted);
-        }
-        .summary-metric-main {
-            font-size: 20px;
-            font-weight: 700;
-            color: var(--text);
-        }
-        .summary-metric-sub {
-            font-size: 12px;
-            color: var(--muted);
-        }
-        .summary-metric.profit .summary-metric-main,
-        .summary-metric.profit .summary-metric-sub { color: var(--profit); }
-        .summary-metric.loss .summary-metric-main,
-        .summary-metric.loss .summary-metric-sub { color: var(--loss); }
-        .activity-map { margin-top: 4px; }
-        .activity-title {
-            font-size: 14px;
-            font-weight: 600;
-            color: var(--muted);
-            margin-bottom: 10px;
-        }
-        .activity-header, .activity-row {
-            display: grid;
-            grid-template-columns: 90px repeat(7, 28px);
-            gap: 6px;
-            align-items: center;
-        }
-        .activity-header { margin-bottom: 4px; }
-        .activity-ticker {
-            font-size: 12px;
-            font-weight: 600;
-            color: var(--primary);
-            text-align: right;
-            padding-right: 8px;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-        .activity-date {
-            font-size: 11px;
-            color: var(--muted);
-            text-align: center;
-        }
-        .activity-cell {
-            width: 24px;
-            height: 24px;
-            border-radius: 4px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 11px;
-            font-weight: 700;
-        }
-        .activity-empty { background: #e2e8f0; color: #94a3b8; }
-        .activity-cell.rating-buy { background: #ffebee; color: #c62828; }
-        .activity-cell.rating-sell { background: #e8f5e9; color: #2e7d32; }
-        .activity-cell.rating-hold { background: #fff8e1; color: #f9a825; }
-        @media (max-width: 900px) {
-            .metrics-row { grid-template-columns: repeat(2, 1fr); }
-            .summary-text { display: none; }
-            .past-ratings-header { display: none; }
-            .header-right { max-width: 35%; }
-        }
-        @media (max-width: 480px) {
-            .metrics-row { grid-template-columns: 1fr; }
-            .card-header { flex-direction: column; }
-            .header-right { align-items: flex-start; max-width: 100%; }
-            .summary-text { text-align: left; }
+
+        @media (max-width: 720px) {
+            .page-header { grid-template-columns: 1fr; }
+            .controls { width: 100%; justify-content: space-between; }
+            .kpi-grid { grid-template-columns: 1fr; }
+            .card-metrics { grid-template-columns: 1fr; }
+            .activity-header, .activity-row {
+                grid-template-columns: 80px repeat(30, 12px);
+                gap: 2px;
+            }
+            .activity-cell { width: 10px; height: 10px; }
+            .activity-day-col.week-start::before,
+            .activity-cell.week-start::before { left: -1px; }
+            .activity-cell::after { font-size: 9px; padding: 4px 6px; }
+            .activity-day-num { font-size: 6px; }
+            .activity-day-week { font-size: 6px; }
+            .container { padding: 20px 18px 32px; }
         }
     </style>
     """
@@ -1295,15 +1763,39 @@ def _build_html(
         '</head>\n'
         '<body>\n'
         '    <div class="container">\n'
-        '        <header>\n'
-        '            <h1>' + safe_title + '</h1>\n'
-        '            <div class="meta">生成时间：' + safe_generated_at + ' &nbsp;|&nbsp; 共 ' + str(len(df)) + ' 只持仓</div>\n'
+        '        <header class="page-header">\n'
+        '            <div class="brand">\n'
+        '                <div class="brand-mark">P</div>\n'
+        '                <div class="brand-text">\n'
+        '                    <h1>' + safe_title + '</h1>\n'
+        '                    <div class="subtitle">生成于 ' + safe_generated_at + ' · 共 ' + str(len(df)) + ' 只持仓</div>\n'
+        '                </div>\n'
+        '            </div>\n'
         '        </header>\n'
         + cards_html +
         '        <footer>\n'
         '            数据来源：TradingAgents 分析报告 + cache OHLCV 收盘价\n'
         '        </footer>\n'
         '    </div>\n'
+        '    <div id="trade-tooltip" class="trade-tooltip">\n'
+        '        <div class="tooltip-title"></div>\n'
+        '        <div class="tooltip-body"></div>\n'
+        '        <div class="tooltip-summary"></div>\n'
+        '    </div>\n'
+        '    <script>\n'
+        '        (function() {\n'
+        '            const cards = document.querySelectorAll(\'.holding-card, .region-dashboard\');\n'
+        '            cards.forEach((card, i) => {\n'
+        '                card.style.opacity = \'0\';\n'
+        '                card.style.transform = \'translateY(20px)\';\n'
+        '                card.style.transition = \'opacity 0.5s cubic-bezier(0.22, 1, 0.36, 1), transform 0.5s cubic-bezier(0.22, 1, 0.36, 1)\';\n'
+        '                setTimeout(() => {\n'
+        '                    card.style.opacity = \'1\';\n'
+        '                    card.style.transform = \'translateY(0)\';\n'
+        '                }, 60 * i);\n'
+        '            });\n'
+        '        })();\n'
+        '    </script>\n'
         '</body>\n'
         '</html>\n'
     )
