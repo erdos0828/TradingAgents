@@ -417,7 +417,7 @@ class TradingAgentsGraph:
         an explicit ``save_path`` or let it default under ``results_dir``.
         """
         if save_path is None:
-            trade_date = str(final_state.get("trade_date", datetime.now().strftime("%Y-%m-%d")))
+            trade_date = str(final_state.get("trade_date", (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")))
             timestamp = datetime.now().strftime("%H%M%S")
             save_path = (
                 Path(self.config["results_dir"])

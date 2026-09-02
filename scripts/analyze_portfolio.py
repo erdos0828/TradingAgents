@@ -15,7 +15,7 @@ import argparse
 import json
 import subprocess
 import sys
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 
@@ -25,8 +25,8 @@ def main():
     )
     parser.add_argument(
         "--date",
-        default=datetime.now().strftime("%Y-%m-%d"),
-        help="Analysis date in YYYY-MM-DD format (default: today)",
+        default=(datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d"),
+        help="Analysis date in YYYY-MM-DD format (default: yesterday)",
     )
     parser.add_argument(
         "--analysts",

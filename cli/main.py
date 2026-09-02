@@ -630,7 +630,7 @@ def get_user_selections(cli_overrides: dict | None = None):
             )
     else:
         if not headless:
-            default_date = datetime.datetime.now().strftime("%Y-%m-%d")
+            default_date = (datetime.datetime.now() - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
             console.print(
                 create_question_box(
                     "Step 2: Analysis Date",
@@ -840,7 +840,7 @@ def get_analysis_date():
     """Get the analysis date from user input."""
     while True:
         date_str = typer.prompt(
-            "", default=datetime.datetime.now().strftime("%Y-%m-%d")
+            "", default=(datetime.datetime.now() - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
         )
         try:
             # Validate date format and ensure it's not in the future
@@ -1537,7 +1537,7 @@ def analyze(
     date: str | None = typer.Option(
         None,
         "--date", "-d",
-        help="Analysis date in YYYY-MM-DD format. Defaults to today. Skips interactive prompt.",
+        help="Analysis date in YYYY-MM-DD format. Defaults to yesterday. Skips interactive prompt.",
     ),
     asset_type: str | None = typer.Option(
         None,
@@ -1642,7 +1642,7 @@ def serve(
 @app.command(name="analyze-portfolio")
 def analyze_portfolio(
     date: str | None = typer.Option(
-        None, "--date", "-d", help="Analysis date in YYYY-MM-DD format (default: today)"
+        None, "--date", "-d", help="Analysis date in YYYY-MM-DD format (default: yesterday)"
     ),
     analysts: str = typer.Option(
         "market,news,fundamentals", "--analysts", "-a", help="Comma-separated analysts"
