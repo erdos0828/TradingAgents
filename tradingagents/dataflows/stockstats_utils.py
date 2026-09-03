@@ -8,6 +8,7 @@ import yfinance as yf
 from stockstats import wrap
 from yfinance.exceptions import YFRateLimitError
 
+from . import sqlite_cache
 from .config import get_config
 from .symbol_utils import NoMarketDataError, normalize_symbol
 from .utils import safe_ticker_component
@@ -128,10 +129,10 @@ def _assert_ohlcv_not_stale(
         )
 
 
-def _needs_same_day_refresh(data_file, curr_date_dt, today_date) -> bool:
+def _needs_same_day_refresh(last_refresh_ts: float | None, curr_date_dt, today_date) -> bool:
     """Whether a cached frame must be refetched to reflect the requested day.
 
-    The cache file is keyed per day, so without this a run started before the
+    The cache is keyed per symbol, so without this a run started before the
     day's bar was final keeps serving that snapshot to every later run (#1150).
     Two distinct staleness cases exist for a current-day request: the bar may be
     missing entirely, or present but still in progress — Yahoo publishes a
@@ -142,7 +143,9 @@ def _needs_same_day_refresh(data_file, curr_date_dt, today_date) -> bool:
     """
     if curr_date_dt.date() < today_date.date():
         return False
-    return time.time() - os.path.getmtime(data_file) > OHLCV_CACHE_TTL_SECONDS
+    if last_refresh_ts is None:
+        return True
+    return time.time() - last_refresh_ts > OHLCV_CACHE_TTL_SECONDS
 
 
 def load_ohlcv(symbol: str, curr_date: str) -> pd.DataFrame:
@@ -161,7 +164,7 @@ def load_ohlcv(symbol: str, curr_date: str) -> pd.DataFrame:
     config = get_config()
     curr_date_dt = pd.to_datetime(curr_date)
 
-    # Cache uses a fixed window (5y to today) so one file per symbol.
+    # Cache uses a fixed window (5y to today) so one entry per symbol.
     today_date = pd.Timestamp.today()
     start_date = today_date - pd.DateOffset(years=5)
     start_str = start_date.strftime("%Y-%m-%d")
@@ -171,25 +174,19 @@ def load_ohlcv(symbol: str, curr_date: str) -> pd.DataFrame:
     end_str = (today_date + pd.Timedelta(days=1)).strftime("%Y-%m-%d")
 
     os.makedirs(config["data_cache_dir"], exist_ok=True)
-    data_file = os.path.join(
-        config["data_cache_dir"],
-        f"{safe_symbol}-YFin-data-{start_str}-{end_str}.csv",
-    )
 
-    # A cached file may be empty if a prior fetch failed (unknown symbol,
+    # A cached frame may be empty if a prior fetch failed (unknown symbol,
     # transient rate limit). Treat an empty/columnless cache as a miss and
-    # re-fetch rather than serving the poisoned file forever.
+    # re-fetch rather than serving poisoned data forever.
     data = None
-    if os.path.exists(data_file):
-        cached = pd.read_csv(data_file, on_bad_lines="skip", encoding="utf-8")
+    if sqlite_cache.has_symbol(safe_symbol):
+        last_refresh = sqlite_cache.get_last_refresh(safe_symbol)
         # Serve the cache only when it is usable and not a stale snapshot of the
         # day being requested (#1150); otherwise fall through and refetch.
-        if (
-            not cached.empty
-            and "Close" in cached.columns
-            and not _needs_same_day_refresh(data_file, curr_date_dt, today_date)
-        ):
-            data = cached
+        if not _needs_same_day_refresh(last_refresh, curr_date_dt, today_date):
+            cached = sqlite_cache.load_ohlcv(safe_symbol, start_date=start_str, end_date=curr_date)
+            if not cached.empty and "Close" in cached.columns:
+                data = cached
 
     if data is None:
         downloaded = yf_retry(lambda: yf.download(
@@ -206,8 +203,8 @@ def load_ohlcv(symbol: str, curr_date: str) -> pd.DataFrame:
             raise NoMarketDataError(
                 symbol, canonical, "Yahoo Finance returned no rows"
             )
-        downloaded.to_csv(data_file, index=False, encoding="utf-8")
-        data = downloaded
+        sqlite_cache.store_ohlcv(safe_symbol, downloaded)
+        data = sqlite_cache.load_ohlcv(safe_symbol, start_date=start_str, end_date=curr_date)
 
     data = _clean_dataframe(data)
 

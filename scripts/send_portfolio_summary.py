@@ -23,12 +23,15 @@ from pathlib import Path
 import pandas as pd
 from dotenv import load_dotenv
 
+from tradingagents.dataflows import sqlite_cache
+from tradingagents.dataflows.config import set_config
+
 # Load environment variables from .env (kept for other env-based config if needed)
 load_dotenv()
 
 
 def _load_holdings(path: Path) -> list[dict]:
-    with open(path, "r", encoding="utf-8") as f:
+    with open(path, encoding="utf-8") as f:
         return json.load(f).get("holdings", [])
 
 
@@ -83,8 +86,6 @@ def _get_recent_signals(ticker: str, reports_dir: Path, target_date: str, days: 
     Each entry is {"date": "YYYY-MM-DD", "rating": "Buy"|"Sell"|"Hold"|"N/A"|"X"}.
     Missing days are marked as "X".
     """
-    from datetime import timedelta
-
     ticker_dir = reports_dir / ticker
     date_to_rating: dict[str, str] = {}
     if ticker_dir.exists():
@@ -151,32 +152,22 @@ def _get_price_data(ticker: str, cache_dir: Path, target_date: str) -> tuple[flo
 
 
 def _get_price_history(ticker: str, cache_dir: Path, target_date: str, days: int | None = 30) -> pd.DataFrame | None:
-    """Fetch OHLCV history up to target_date from cache.
+    """Fetch OHLCV history up to target_date from the SQLite cache.
 
     If ``days`` is None, returns all available history up to ``target_date``.
-    Multiple cache files may exist; pick the one whose latest date is the
-    most recent (but still <= target_date) to avoid stale partial files.
     """
     try:
-        best_df: pd.DataFrame | None = None
-        best_max_date: str | None = None
-        for f in cache_dir.glob(f"{ticker}-YFin-data-*.csv"):
-            df = pd.read_csv(f)
-            if df.empty or "Close" not in df.columns or "Date" not in df.columns:
-                continue
-            required = {"Open", "High", "Low", "Close"}
-            if not required.issubset(df.columns):
-                continue
-            df = df.sort_values("Date").reset_index(drop=True)
-            df = df[df["Date"] <= target_date]
-            if df.empty:
-                continue
-            max_date = str(df["Date"].iloc[-1])
-            if best_max_date is None or max_date > best_max_date:
-                best_max_date = max_date
-                best_df = df if days is None else df.tail(days)
-        if best_df is not None:
-            return best_df.reset_index(drop=True)
+        set_config({"data_cache_dir": str(cache_dir)})
+        df = sqlite_cache.load_ohlcv(ticker, end_date=target_date)
+        if df.empty or "Close" not in df.columns or "Date" not in df.columns:
+            return None
+        required = {"Open", "High", "Low", "Close"}
+        if not required.issubset(df.columns):
+            return None
+        df = df.reset_index(drop=True)
+        if days is not None:
+            df = df.tail(days).reset_index(drop=True)
+        return df
     except Exception:
         pass
     return None
@@ -187,7 +178,7 @@ def _load_transactions(transactions_path: Path) -> dict[str, list[dict]]:
     if not transactions_path.exists():
         return {}
     try:
-        with open(transactions_path, "r", encoding="utf-8") as f:
+        with open(transactions_path, encoding="utf-8") as f:
             records = json.load(f)
     except Exception:
         return {}
@@ -691,7 +682,7 @@ def _build_region_summary_html(
     )
 
     tickers = region_df["Ticker"].tolist()
-    ticker_names = dict(zip(region_df["Ticker"], region_df["名称"])) if "名称" in region_df.columns else {}
+    ticker_names = dict(zip(region_df["Ticker"], region_df["名称"], strict=False)) if "名称" in region_df.columns else {}
     activity_html = _build_signal_activity_html(tickers, reports_dir, target_date, ticker_names=ticker_names)
 
     return f"""
