@@ -30,8 +30,8 @@ from rich.table import Table
 from rich.text import Text
 
 from cli.announcements import display_announcements, fetch_announcements
-from cli.stats_handler import StatsCallbackHandler
 from cli.models import AnalystType, AssetType
+from cli.stats_handler import StatsCallbackHandler
 from cli.utils import (
     ask_anthropic_effort,
     ask_gemini_thinking_config,
@@ -623,7 +623,7 @@ def get_user_selections(cli_overrides: dict | None = None):
             console.print(
                 "[red]Error: Invalid date format. Please use YYYY-MM-DD.[/red]"
             )
-            raise typer.Exit(code=1)
+            raise typer.Exit(code=1) from None
         if not headless:
             console.print(
                 f"[green]✓ Analysis date from command line:[/green] {analysis_date}"
@@ -1655,6 +1655,9 @@ def analyze_portfolio(
     skip: str | None = typer.Option(
         None, "--skip", help="Comma-separated list of tickers to skip"
     ),
+    market: str = typer.Option(
+        "all", "--market", "-m", help="Market filter: all, a-share, us (default: all)"
+    ),
 ):
     """Batch analyze all stocks in portfolio holdings."""
     project_root = Path(__file__).resolve().parent.parent
@@ -1671,6 +1674,7 @@ def analyze_portfolio(
     cmd.extend(["--holdings", holdings])
     if skip:
         cmd.extend(["--skip", skip])
+    cmd.extend(["--market", market])
     try:
         subprocess.run(cmd, cwd=project_root, check=True, env=env)
     except KeyboardInterrupt:

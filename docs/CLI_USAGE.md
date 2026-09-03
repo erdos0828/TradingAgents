@@ -172,6 +172,7 @@ tradingagents serve --holdings data/my_holdings.json
 | `--dry-run` | | 只打印将要执行的命令 | `False` |
 | `--holdings` | | 持仓 JSON 文件路径 | `data/portfolio_holdings.json` |
 | `--skip` | | 逗号分隔的跳过 ticker 列表 | 无 |
+| `--market` | `-m` | 市场筛选：`all`、`a-share`、`us` | `all` |
 
 ### 示例
 
@@ -187,6 +188,12 @@ tradingagents analyze-portfolio --dry-run
 
 # 关闭钉钉通知
 tradingagents analyze-portfolio --no-dingtalk
+
+# 只分析 A 股
+tradingagents analyze-portfolio --market a-share
+
+# 只分析美股
+tradingagents analyze-portfolio --market us
 ```
 
 ### 持仓文件格式

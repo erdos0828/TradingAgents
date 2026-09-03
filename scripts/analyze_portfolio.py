@@ -9,6 +9,8 @@ Usage:
     python scripts/analyze_portfolio.py --date 2026-08-19
     python scripts/analyze_portfolio.py --skip TSLA,AAPL
     python scripts/analyze_portfolio.py --dry-run
+    python scripts/analyze_portfolio.py --market a-share
+    python scripts/analyze_portfolio.py --market us
 """
 
 import argparse
@@ -17,6 +19,14 @@ import subprocess
 import sys
 from datetime import datetime, timedelta
 from pathlib import Path
+
+
+def _detect_market(ticker: str) -> str:
+    """Classify a ticker into 'a-share' or 'us'."""
+    upper = ticker.upper()
+    if upper.endswith((".SS", ".SZ", ".BJ")):
+        return "a-share"
+    return "us"
 
 
 def main():
@@ -53,6 +63,12 @@ def main():
         default="",
         help="Comma-separated list of tickers to skip",
     )
+    parser.add_argument(
+        "--market",
+        default="all",
+        choices=["all", "a-share", "us"],
+        help="Filter holdings by market: all, a-share, us (default: all)",
+    )
 
     args = parser.parse_args()
 
@@ -62,7 +78,7 @@ def main():
         print(f"Error: Holdings file not found: {holdings_path}")
         sys.exit(1)
 
-    with open(holdings_path, "r", encoding="utf-8") as f:
+    with open(holdings_path, encoding="utf-8") as f:
         data = json.load(f)
 
     holdings = data.get("holdings", [])
@@ -73,23 +89,30 @@ def main():
     # Parse skip list
     skip_tickers = {t.strip().upper() for t in args.skip.split(",") if t.strip()}
 
-    # Filter holdings
+    # Filter holdings by skip list and market
     tickers_to_analyze = [
         h for h in holdings
         if h["ticker"].upper() not in skip_tickers
+        and (args.market == "all" or _detect_market(h["ticker"]) == args.market)
     ]
 
-    print(f"=" * 60)
-    print(f"Portfolio Batch Analysis")
-    print(f"=" * 60)
+    if not tickers_to_analyze:
+        market_label = {"all": "", "a-share": " A-share", "us": " US"}.get(args.market, "")
+        print(f"Error: No{market_label} holdings found to analyze")
+        sys.exit(1)
+
+    print("=" * 60)
+    print("Portfolio Batch Analysis")
+    print("=" * 60)
     print(f"Date: {args.date}")
     print(f"Analysts: {args.analysts}")
     print(f"DingTalk: {'enabled' if not args.no_dingtalk else 'disabled'}")
     print(f"Holdings file: {holdings_path}")
+    print(f"Market filter: {args.market}")
     print(f"Total tickers: {len(tickers_to_analyze)}")
     if skip_tickers:
         print(f"Skipped: {', '.join(skip_tickers)}")
-    print(f"=" * 60)
+    print("=" * 60)
     print()
 
     # Show holdings summary
@@ -143,7 +166,7 @@ def main():
             )
 
             if result.returncode == 0:
-                print(f"  ✓ Success")
+                print("  ✓ Success")
                 # Show key output lines
                 for line in result.stdout.split("\n"):
                     if "auto-saved" in line.lower() or "dingtalk" in line.lower():
@@ -158,7 +181,7 @@ def main():
                 fail_count += 1
 
         except subprocess.TimeoutExpired:
-            print(f"  ✗ Timeout (>10 minutes)")
+            print("  ✗ Timeout (>10 minutes)")
             fail_count += 1
         except Exception as e:
             print(f"  ✗ Exception: {e}")
