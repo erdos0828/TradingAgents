@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
+import yfinance as yf
 from langgraph.prebuilt import ToolNode
 
 # Import the abstract tool methods from agent_utils
@@ -28,7 +29,6 @@ from tradingagents.agents.utils.agent_utils import (
 )
 from tradingagents.agents.utils.memory import TradingMemoryLog
 from tradingagents.dataflows.config import set_config
-from tradingagents.dataflows.mcp_yfinance_client import mcp_get_stock_history
 from tradingagents.dataflows.utils import safe_ticker_component
 from tradingagents.default_config import DEFAULT_CONFIG
 from tradingagents.llm_clients import create_llm_client
@@ -276,10 +276,8 @@ class TradingAgentsGraph:
             # Normalize so the realized-return lookup hits the same instrument
             # the analysis priced (e.g. XAUUSD -> GC=F) (#984). The benchmark is
             # already a canonical Yahoo symbol from ``_resolve_benchmark``.
-            stock = mcp_get_stock_history(
-                normalize_symbol(ticker), start=trade_date, end=end_str
-            )
-            bench = mcp_get_stock_history(benchmark, start=trade_date, end=end_str)
+            stock = yf.Ticker(normalize_symbol(ticker)).history(start=trade_date, end=end_str)
+            bench = yf.Ticker(benchmark).history(start=trade_date, end=end_str)
 
             if len(stock) < 2 or len(bench) < 2:
                 return None, None, None

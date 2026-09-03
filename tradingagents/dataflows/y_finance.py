@@ -2,20 +2,15 @@ from datetime import datetime
 from typing import Annotated
 
 import pandas as pd
+import yfinance as yf
 from dateutil.relativedelta import relativedelta
-
-from tradingagents.dataflows.mcp_yfinance_client import (
-    mcp_download_stock_data,
-    mcp_get_financials,
-    mcp_get_insider_transactions,
-    mcp_get_stock_info,
-)
 
 from .stockstats_utils import (
     StockstatsUtils,
     _assert_ohlcv_not_stale,
     filter_financials_by_date,
     load_ohlcv,
+    yf_retry,
 )
 from .symbol_utils import NoMarketDataError, normalize_symbol
 
@@ -31,19 +26,13 @@ def get_YFin_data_online(
 
     # Resolve broker/forex symbols to Yahoo's convention (XAUUSD+ -> GC=F).
     canonical = normalize_symbol(symbol)
+    ticker = yf.Ticker(canonical)
 
     # yfinance treats ``end`` as EXCLUSIVE, so it would drop the requested
     # end_date row (and the current day when end_date is today). Request one day
     # past end_date so the requested range is actually inclusive (#986/#987).
     end_inclusive = (end_dt + relativedelta(days=1)).strftime("%Y-%m-%d")
-    data = mcp_download_stock_data(
-        canonical,
-        start=start_date,
-        end=end_inclusive,
-        interval="1d",
-        auto_adjust=True,
-        multi_level_index=False,
-    )
+    data = yf_retry(lambda: ticker.history(start=start_date, end=end_inclusive))
 
     # Empty result means the symbol is unknown/delisted. Raise a typed error
     # instead of returning prose: the routing layer turns it into a single
@@ -52,6 +41,10 @@ def get_YFin_data_online(
         raise NoMarketDataError(
             symbol, canonical, f"no rows between {start_date} and {end_date}"
         )
+
+    # Remove timezone info from index for cleaner output
+    if data.index.tz is not None:
+        data.index = data.index.tz_localize(None)
 
     # Reject a stale frame (e.g. a year-old partial response) before it is
     # formatted into the report. Raises NoMarketDataError, which the router
@@ -282,10 +275,11 @@ def get_fundamentals(
     ticker: Annotated[str, "ticker symbol of the company"],
     curr_date: Annotated[str, "current date (not used for yfinance)"] = None
 ):
-    """Get company fundamentals overview from yfinance via MCP."""
+    """Get company fundamentals overview from yfinance."""
     canonical = normalize_symbol(ticker)
     try:
-        info = mcp_get_stock_info(canonical) or {}
+        ticker_obj = yf.Ticker(canonical)
+        info = yf_retry(lambda: ticker_obj.info)
 
         if not info:
             raise NoMarketDataError(ticker, canonical, "no fundamentals returned")
@@ -349,10 +343,15 @@ def get_balance_sheet(
     freq: Annotated[str, "frequency of data: 'annual' or 'quarterly'"] = "quarterly",
     curr_date: Annotated[str, "current date in YYYY-MM-DD format"] = None
 ):
-    """Get balance sheet data from yfinance via MCP."""
+    """Get balance sheet data from yfinance."""
     canonical = normalize_symbol(ticker)
     try:
-        data = mcp_get_financials(canonical, statement="balance", freq=freq)
+        ticker_obj = yf.Ticker(canonical)
+
+        if freq.lower() == "quarterly":
+            data = yf_retry(lambda: ticker_obj.quarterly_balance_sheet)
+        else:
+            data = yf_retry(lambda: ticker_obj.balance_sheet)
 
         data = filter_financials_by_date(data, curr_date)
 
@@ -379,10 +378,15 @@ def get_cashflow(
     freq: Annotated[str, "frequency of data: 'annual' or 'quarterly'"] = "quarterly",
     curr_date: Annotated[str, "current date in YYYY-MM-DD format"] = None
 ):
-    """Get cash flow data from yfinance via MCP."""
+    """Get cash flow data from yfinance."""
     canonical = normalize_symbol(ticker)
     try:
-        data = mcp_get_financials(canonical, statement="cash", freq=freq)
+        ticker_obj = yf.Ticker(canonical)
+
+        if freq.lower() == "quarterly":
+            data = yf_retry(lambda: ticker_obj.quarterly_cashflow)
+        else:
+            data = yf_retry(lambda: ticker_obj.cashflow)
 
         data = filter_financials_by_date(data, curr_date)
 
@@ -409,10 +413,15 @@ def get_income_statement(
     freq: Annotated[str, "frequency of data: 'annual' or 'quarterly'"] = "quarterly",
     curr_date: Annotated[str, "current date in YYYY-MM-DD format"] = None
 ):
-    """Get income statement data from yfinance via MCP."""
+    """Get income statement data from yfinance."""
     canonical = normalize_symbol(ticker)
     try:
-        data = mcp_get_financials(canonical, statement="income", freq=freq)
+        ticker_obj = yf.Ticker(canonical)
+
+        if freq.lower() == "quarterly":
+            data = yf_retry(lambda: ticker_obj.quarterly_income_stmt)
+        else:
+            data = yf_retry(lambda: ticker_obj.income_stmt)
 
         data = filter_financials_by_date(data, curr_date)
 
@@ -437,10 +446,11 @@ def get_income_statement(
 def get_insider_transactions(
     ticker: Annotated[str, "ticker symbol of the company"]
 ):
-    """Get insider transactions data from yfinance via MCP."""
+    """Get insider transactions data from yfinance."""
     canonical = normalize_symbol(ticker)
     try:
-        data = mcp_get_insider_transactions(canonical)
+        ticker_obj = yf.Ticker(canonical)
+        data = yf_retry(lambda: ticker_obj.insider_transactions)
 
         # Empty is normal here (many valid symbols have no insider filings),
         # so report it plainly rather than treating the symbol as invalid.

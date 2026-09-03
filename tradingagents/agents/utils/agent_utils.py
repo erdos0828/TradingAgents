@@ -3,6 +3,7 @@ import logging
 from collections.abc import Mapping
 from typing import Any
 
+import yfinance as yf
 from langchain_core.messages import HumanMessage, RemoveMessage
 
 # Import tools from separate utility files
@@ -22,7 +23,6 @@ from tradingagents.agents.utils.news_data_tools import (
 )
 from tradingagents.agents.utils.prediction_markets_tools import get_prediction_markets
 from tradingagents.agents.utils.technical_indicators_tools import get_indicators
-from tradingagents.dataflows.mcp_yfinance_client import mcp_get_stock_info
 
 # Public surface: the data tools are imported here so agents and the graph
 # import them from one place, plus the instrument/language helpers defined below.
@@ -96,7 +96,7 @@ def resolve_instrument_identity(ticker: str) -> dict:
     from tradingagents.dataflows.symbol_utils import normalize_symbol
 
     try:
-        info = mcp_get_stock_info(normalize_symbol(ticker)) or {}
+        info = yf.Ticker(normalize_symbol(ticker)).info or {}
     except Exception as exc:  # noqa: BLE001 — fail open, never block the run
         logger.debug("Could not resolve instrument identity for %s: %s", ticker, exc)
         return {}

@@ -4,9 +4,9 @@ import time
 from typing import Annotated
 
 import pandas as pd
+import yfinance as yf
 from stockstats import wrap
-
-from tradingagents.dataflows.mcp_yfinance_client import mcp_download_stock_data
+from yfinance.exceptions import YFRateLimitError
 
 from .config import get_config
 from .symbol_utils import NoMarketDataError, normalize_symbol
@@ -24,6 +24,25 @@ MAX_OHLCV_STALE_DAYS = 10
 # up today's close soon after it publishes, long enough that a day with no bar
 # at all (weekend, holiday) cannot trigger a download on every call.
 OHLCV_CACHE_TTL_SECONDS = 900
+
+
+def yf_retry(func, max_retries=3, base_delay=2.0):
+    """Execute a yfinance call with exponential backoff on rate limits.
+
+    yfinance raises YFRateLimitError on HTTP 429 responses but does not
+    retry them internally. This wrapper adds retry logic specifically
+    for rate limits. Other exceptions propagate immediately.
+    """
+    for attempt in range(max_retries + 1):
+        try:
+            return func()
+        except YFRateLimitError:
+            if attempt < max_retries:
+                delay = base_delay * (2 ** attempt)
+                logger.warning(f"Yahoo Finance rate limited, retrying in {delay:.0f}s (attempt {attempt + 1}/{max_retries})")
+                time.sleep(delay)
+            else:
+                raise
 
 
 def _ensure_date_column(data: pd.DataFrame) -> pd.DataFrame:
@@ -173,14 +192,14 @@ def load_ohlcv(symbol: str, curr_date: str) -> pd.DataFrame:
             data = cached
 
     if data is None:
-        downloaded = mcp_download_stock_data(
+        downloaded = yf_retry(lambda: yf.download(
             canonical,
             start=start_str,
             end=end_str,
-            interval="1d",
-            auto_adjust=True,
             multi_level_index=False,
-        )
+            progress=False,
+            auto_adjust=True,
+        ))
         downloaded = _ensure_date_column(downloaded.reset_index())
         # Only cache real data — never persist an empty frame.
         if downloaded.empty or "Close" not in downloaded.columns:
