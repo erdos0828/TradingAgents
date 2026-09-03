@@ -336,6 +336,9 @@ def migrate_from_csv(cache_dir: str | None = None) -> int:
                 continue
 
             store_ohlcv(symbol, df)
+            # Treat the imported data as freshly refreshed so the TTL guard
+            # does not force an immediate re-download.
+            set_last_refresh(symbol, _now_ts())
             imported += 1
             logger.info("Migrated cache CSV to SQLite: %s", csv_file.name)
         except Exception as exc:
