@@ -2,19 +2,21 @@
 
 Wraps the third-party `tradingview-ta` package to expose an aggregated
 oscillator / moving-average consensus that the Market Analyst can call like
-any other data tool.
+any other data tool.  Results are cached in the shared SQLite cache keyed by
+(symbol, date) so repeated analyses for the same day do not hit the network.
 """
 
 from __future__ import annotations
 
 import logging
-from typing import Annotated
+from typing import Annotated, Any
 
 import yfinance as yf
 from langchain_core.tools import tool
 from tradingview_ta import Interval, TA_Handler
 
 from tradingagents.dataflows.symbol_utils import normalize_symbol
+from tradingagents.dataflows.tradingview_ta_cache import load_ta, store_ta
 
 logger = logging.getLogger(__name__)
 
@@ -56,18 +58,8 @@ def _resolve_tradingview_params(symbol: str) -> dict[str, str]:
     return {"screener": "america", "exchange": tv_exchange, "symbol": norm}
 
 
-@tool
-def get_tradingview_ta(
-    symbol: Annotated[str, "ticker symbol of the company"],
-    curr_date: Annotated[str, "The current trading date you are trading on, YYYY-mm-dd"],
-) -> str:
-    """Retrieve TradingView's aggregated technical analysis for a ticker.
-
-    Uses the daily interval and returns the overall recommendation plus the
-    oscillator and moving-average vote breakdown.  Network or mapping failures
-    are raised (not swallowed) so the pipeline fails fast and the error is
-    logged by the caller.
-    """
+def _fetch_analysis(symbol: str, curr_date: str) -> dict[str, Any]:
+    """Fetch fresh TradingView TA data from the network and cache it."""
     params = _resolve_tradingview_params(symbol)
     logger.info(
         "Fetching TradingView TA for %s on %s (screener=%s, exchange=%s)",
@@ -86,17 +78,54 @@ def get_tradingview_ta(
     analysis = handler.get_analysis()
     summary = analysis.summary
 
+    data = {
+        "recommendation": summary["RECOMMENDATION"],
+        "buy_votes": summary["BUY"],
+        "sell_votes": summary["SELL"],
+        "neutral_votes": summary["NEUTRAL"],
+        "oscillators": dict(analysis.oscillators["COMPUTE"]),
+        "moving_averages": dict(analysis.moving_averages["COMPUTE"]),
+    }
+    store_ta(symbol, curr_date, data)
+    return data
+
+
+def _format_analysis(data: dict[str, Any], curr_date: str) -> str:
+    """Render cached/fresh TA data into the tool's text output."""
     lines = [
         f"TradingView Technical Analysis ({curr_date}, daily):",
-        f"Overall recommendation: {summary['RECOMMENDATION']}",
-        f"Votes - BUY: {summary['BUY']}, SELL: {summary['SELL']}, NEUTRAL: {summary['NEUTRAL']}",
+        f"Overall recommendation: {data['recommendation']}",
+        "Votes - BUY: {}, SELL: {}, NEUTRAL: {}".format(
+            data["buy_votes"], data["sell_votes"], data["neutral_votes"]
+        ),
         "",
         "Oscillator votes:",
     ]
-    for name, vote in analysis.oscillators["COMPUTE"].items():
+    for name, vote in data["oscillators"].items():
         lines.append(f"  {name}: {vote}")
     lines.extend(["", "Moving average votes:"])
-    for name, vote in analysis.moving_averages["COMPUTE"].items():
+    for name, vote in data["moving_averages"].items():
         lines.append(f"  {name}: {vote}")
-
     return "\n".join(lines)
+
+
+@tool
+def get_tradingview_ta(
+    symbol: Annotated[str, "ticker symbol of the company"],
+    curr_date: Annotated[str, "The current trading date you are trading on, YYYY-mm-dd"],
+) -> str:
+    """Retrieve TradingView's aggregated technical analysis for a ticker.
+
+    Uses the daily interval and returns the overall recommendation plus the
+    oscillator and moving-average vote breakdown.  Results are cached in
+    SQLite by (symbol, date); a cache hit avoids a network request.  Network
+    or mapping failures are raised (not swallowed) so the pipeline fails fast
+    and the error is logged by the caller.
+    """
+    cached = load_ta(symbol, curr_date)
+    if cached is not None:
+        logger.info("Using cached TradingView TA for %s on %s", symbol, curr_date)
+        return _format_analysis(cached, curr_date)
+
+    data = _fetch_analysis(symbol, curr_date)
+    return _format_analysis(data, curr_date)
