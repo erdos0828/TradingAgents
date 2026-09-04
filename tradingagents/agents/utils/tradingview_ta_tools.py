@@ -31,6 +31,57 @@ _US_EXCHANGE_MAP = {
     "BATS": "BATS",
 }
 
+# Curated list of raw indicator values exposed to the LLM.  These are the
+# most commonly referenced figures when turning a vote-based consensus into
+# a nuanced technical view.
+_KEY_INDICATORS = [
+    # Price / volume
+    "close",
+    "open",
+    "high",
+    "low",
+    "volume",
+    "change",
+    # Oscillators
+    "RSI",
+    "Stoch.K",
+    "Stoch.D",
+    "CCI20",
+    "ADX",
+    "AO",
+    "Mom",
+    "MACD.macd",
+    "MACD.signal",
+    "Stoch.RSI.K",
+    "W.R",
+    "BBPower",
+    "UO",
+    # Moving averages
+    "EMA5",
+    "SMA5",
+    "EMA10",
+    "SMA10",
+    "EMA20",
+    "SMA20",
+    "EMA30",
+    "SMA30",
+    "EMA50",
+    "SMA50",
+    "EMA100",
+    "SMA100",
+    "EMA200",
+    "SMA200",
+    "VWMA",
+    "HullMA9",
+    # Bands / pivots
+    "BB.lower",
+    "BB.upper",
+    "P.SAR",
+    "Pivot.M.Classic.S1",
+    "Pivot.M.Classic.Middle",
+    "Pivot.M.Classic.R1",
+]
+
 
 def _resolve_tradingview_params(symbol: str) -> dict[str, str]:
     """Map a ticker to TradingView screener/exchange parameters.
@@ -56,6 +107,28 @@ def _resolve_tradingview_params(symbol: str) -> dict[str, str]:
         tv_exchange = "NASDAQ"
 
     return {"screener": "america", "exchange": tv_exchange, "symbol": norm}
+
+
+def _extract_key_indicators(indicators: dict[str, Any]) -> dict[str, Any]:
+    """Return a subset of raw indicator values useful for the report."""
+    extracted: dict[str, Any] = {}
+    for key in _KEY_INDICATORS:
+        value = indicators.get(key)
+        if value is not None:
+            extracted[key] = value
+    return extracted
+
+
+def _format_value(value: Any) -> str:
+    """Format a single indicator value for readability."""
+    if isinstance(value, (int, float)):
+        # Large numbers (volume) get commas; prices/small numbers stay compact.
+        if abs(value) >= 1_000_000:
+            return f"{value:,.0f}"
+        if isinstance(value, int):
+            return str(value)
+        return f"{value:.4f}" if abs(value) < 0.1 else f"{value:.2f}"
+    return str(value)
 
 
 def _fetch_analysis(symbol: str, curr_date: str) -> dict[str, Any]:
@@ -85,6 +158,7 @@ def _fetch_analysis(symbol: str, curr_date: str) -> dict[str, Any]:
         "neutral_votes": summary["NEUTRAL"],
         "oscillators": dict(analysis.oscillators["COMPUTE"]),
         "moving_averages": dict(analysis.moving_averages["COMPUTE"]),
+        "indicators": _extract_key_indicators(analysis.indicators),
     }
     store_ta(symbol, curr_date, data)
     return data
@@ -106,6 +180,60 @@ def _format_analysis(data: dict[str, Any], curr_date: str) -> str:
     lines.extend(["", "Moving average votes:"])
     for name, vote in data["moving_averages"].items():
         lines.append(f"  {name}: {vote}")
+
+    indicators = data.get("indicators") or {}
+    if indicators:
+        lines.extend(["", "Key indicator values:"])
+
+        price_vol = {
+            k: indicators.get(k)
+            for k in ("open", "high", "low", "close", "volume", "change")
+            if indicators.get(k) is not None
+        }
+        if price_vol:
+            parts = [f"{k}={_format_value(v)}" for k, v in price_vol.items()]
+            lines.append(f"  Price/Volume: {'  '.join(parts)}")
+
+        oscillator_keys = [
+            "RSI", "Stoch.K", "Stoch.D", "CCI20", "ADX", "AO", "Mom",
+            "MACD.macd", "MACD.signal", "Stoch.RSI.K", "W.R", "BBPower", "UO",
+        ]
+        osc_parts = [
+            f"{k}={_format_value(indicators[k])}"
+            for k in oscillator_keys
+            if k in indicators
+        ]
+        if osc_parts:
+            lines.append(f"  Oscillators: {'  '.join(osc_parts)}")
+
+        ma_keys = [
+            "EMA5", "SMA5", "EMA10", "SMA10", "EMA20", "SMA20",
+            "EMA30", "SMA30", "EMA50", "SMA50", "EMA100", "SMA100",
+            "EMA200", "SMA200", "VWMA", "HullMA9",
+        ]
+        ma_parts = [
+            f"{k}={_format_value(indicators[k])}"
+            for k in ma_keys
+            if k in indicators
+        ]
+        if ma_parts:
+            lines.append(f"  Moving Averages: {'  '.join(ma_parts)}")
+
+        band_keys = ["BB.lower", "BB.upper", "P.SAR"]
+        band_parts = [
+            f"{k}={_format_value(indicators[k])}"
+            for k in band_keys
+            if k in indicators
+        ]
+        pivot_keys = ["Pivot.M.Classic.S1", "Pivot.M.Classic.Middle", "Pivot.M.Classic.R1"]
+        pivot_parts = [
+            f"{k.replace('Pivot.M.Classic.', '')}={_format_value(indicators[k])}"
+            for k in pivot_keys
+            if k in indicators
+        ]
+        if band_parts or pivot_parts:
+            lines.append(f"  Bands/Pivots: {'  '.join(band_parts + pivot_parts)}")
+
     return "\n".join(lines)
 
 
@@ -117,10 +245,13 @@ def get_tradingview_ta(
     """Retrieve TradingView's aggregated technical analysis for a ticker.
 
     Uses the daily interval and returns the overall recommendation plus the
-    oscillator and moving-average vote breakdown.  Results are cached in
-    SQLite by (symbol, date); a cache hit avoids a network request.  Network
-    or mapping failures are raised (not swallowed) so the pipeline fails fast
-    and the error is logged by the caller.
+    oscillator and moving-average vote breakdown.  Key raw indicator values
+    (RSI, MACD, moving averages, Bollinger Bands, pivot points, etc.) are
+    also included so the analyst can reason about magnitude, not just vote
+    direction.  Results are cached in SQLite by (symbol, date); a cache hit
+    avoids a network request.  Network or mapping failures are raised (not
+    swallowed) so the pipeline fails fast and the error is logged by the
+    caller.
     """
     cached = load_ta(symbol, curr_date)
     if cached is not None:

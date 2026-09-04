@@ -18,6 +18,9 @@ from tradingagents.dataflows.utils import safe_ticker_component
 
 logger = logging.getLogger(__name__)
 
+# Schema evolution: the ``indicators`` column was added after the initial
+# release.  We create it on new databases and migrate existing tables via
+# ALTER TABLE when the column is missing.
 _INIT_SQL = """
 CREATE TABLE IF NOT EXISTS tradingview_ta (
     symbol TEXT NOT NULL,
@@ -28,12 +31,17 @@ CREATE TABLE IF NOT EXISTS tradingview_ta (
     neutral_votes INTEGER,
     oscillators TEXT,
     moving_averages TEXT,
+    indicators TEXT,
     cached_at REAL NOT NULL,
     PRIMARY KEY (symbol, date)
 );
 
 CREATE INDEX IF NOT EXISTS idx_tradingview_ta_symbol_date
     ON tradingview_ta(symbol, date);
+"""
+
+_MIGRATE_ADD_INDICATORS = """
+ALTER TABLE tradingview_ta ADD COLUMN indicators TEXT;
 """
 
 
@@ -47,6 +55,17 @@ def _now_ts() -> float:
     return datetime.now(timezone.utc).timestamp()
 
 
+def _ensure_schema(conn: sqlite3.Connection) -> None:
+    """Create the table and migrate older schemas that lack ``indicators``."""
+    conn.executescript(_INIT_SQL)
+    try:
+        conn.execute(_MIGRATE_ADD_INDICATORS)
+        conn.commit()
+    except sqlite3.OperationalError:
+        # Column already exists — safe to ignore.
+        pass
+
+
 def _get_connection() -> sqlite3.Connection:
     """Open a connection to the shared cache DB and ensure the TA table exists."""
     db = _db_path()
@@ -54,8 +73,7 @@ def _get_connection() -> sqlite3.Connection:
     conn = sqlite3.connect(str(db), check_same_thread=False)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
-    conn.executescript(_INIT_SQL)
-    conn.commit()
+    _ensure_schema(conn)
     return conn
 
 
@@ -76,6 +94,7 @@ def load_ta(symbol: str, date: str) -> dict[str, Any] | None:
                     "neutral_votes": row["neutral_votes"],
                     "oscillators": json.loads(row["oscillators"] or "{}"),
                     "moving_averages": json.loads(row["moving_averages"] or "{}"),
+                    "indicators": json.loads(row["indicators"] or "{}"),
                     "cached_at": row["cached_at"],
                 }
     except Exception as exc:  # noqa: BLE001 — cache read failures are non-fatal
@@ -88,15 +107,16 @@ def store_ta(symbol: str, date: str, data: dict[str, Any]) -> None:
     norm = _normalize_symbol(symbol)
     oscillators = json.dumps(data.get("oscillators", {}), ensure_ascii=False)
     moving_averages = json.dumps(data.get("moving_averages", {}), ensure_ascii=False)
+    indicators = json.dumps(data.get("indicators", {}), ensure_ascii=False)
     try:
         with _get_connection() as conn:
             conn.execute(
                 """
                 INSERT INTO tradingview_ta (
                     symbol, date, recommendation, buy_votes, sell_votes, neutral_votes,
-                    oscillators, moving_averages, cached_at
+                    oscillators, moving_averages, indicators, cached_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(symbol, date) DO UPDATE SET
                     recommendation=excluded.recommendation,
                     buy_votes=excluded.buy_votes,
@@ -104,6 +124,7 @@ def store_ta(symbol: str, date: str, data: dict[str, Any]) -> None:
                     neutral_votes=excluded.neutral_votes,
                     oscillators=excluded.oscillators,
                     moving_averages=excluded.moving_averages,
+                    indicators=excluded.indicators,
                     cached_at=excluded.cached_at
                 """,
                 (
@@ -115,6 +136,7 @@ def store_ta(symbol: str, date: str, data: dict[str, Any]) -> None:
                     data.get("neutral_votes"),
                     oscillators,
                     moving_averages,
+                    indicators,
                     _now_ts(),
                 ),
             )
