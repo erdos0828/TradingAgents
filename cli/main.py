@@ -5,6 +5,7 @@ import hashlib
 import hmac
 import json
 import os
+import signal
 import subprocess
 import sys
 import time
@@ -83,6 +84,12 @@ app = typer.Typer(
     help="TradingAgents CLI: Multi-Agents LLM Financial Trading Framework",
     add_completion=True,  # Enable shell completion
 )
+
+serve_app = typer.Typer(
+    name="serve",
+    help="Manage the portfolio summary web server.",
+)
+app.add_typer(serve_app, name="serve")
 
 
 @app.callback()
@@ -1598,19 +1605,57 @@ def analyze(
         raise typer.Exit(code=1) from None
 
 
-@app.command(name="serve")
-def serve(
-    host: str = typer.Option("127.0.0.1", "--host", "-h", help="Bind host"),
-    port: int = typer.Option(5000, "--port", "-p", help="Bind port"),
-    holdings: str | None = typer.Option(None, "--holdings", help="Path to portfolio holdings JSON"),
-    reports_dir: str | None = typer.Option(None, "--reports-dir", help="Path to reports directory"),
-    cache_dir: str | None = typer.Option(None, "--cache-dir", help="Path to cache directory"),
-    report_server_url: str | None = typer.Option(
-        None, "--report-server-url", help="Base URL of the report server for detail links"
-    ),
-):
-    """Start the portfolio summary web server."""
-    project_root = Path(__file__).resolve().parent.parent
+def _serve_project_root() -> Path:
+    return Path(__file__).resolve().parent.parent
+
+
+def _serve_pid_file(port: int) -> Path:
+    return _serve_project_root() / f".tradingagents_serve.{port}.pid"
+
+
+def _serve_log_file() -> Path:
+    log_dir = _serve_project_root() / "logs"
+    log_dir.mkdir(exist_ok=True)
+    return log_dir / "tradingagents_serve.log"
+
+
+def _is_process_alive(pid: int) -> bool:
+    try:
+        os.kill(pid, 0)
+        return True
+    except (OSError, ProcessLookupError):
+        return False
+
+
+def _read_pid(port: int) -> int | None:
+    pid_file = _serve_pid_file(port)
+    if not pid_file.exists():
+        return None
+    try:
+        return int(pid_file.read_text().strip())
+    except Exception:
+        return None
+
+
+def _write_pid(port: int, pid: int) -> None:
+    _serve_pid_file(port).write_text(str(pid))
+
+
+def _remove_pid(port: int) -> None:
+    pid_file = _serve_pid_file(port)
+    if pid_file.exists():
+        pid_file.unlink()
+
+
+def _build_server_cmd(
+    host: str,
+    port: int,
+    holdings: str | None,
+    reports_dir: str | None,
+    cache_dir: str | None,
+    report_server_url: str | None,
+) -> tuple[list[str], dict[str, str], Path]:
+    project_root = _serve_project_root()
     env = os.environ.copy()
     env["PYTHONPATH"] = f"{project_root}{os.pathsep}{env.get('PYTHONPATH', '')}"
     cmd = [
@@ -1630,13 +1675,137 @@ def serve(
         cmd.extend(["--cache-dir", cache_dir])
     if report_server_url:
         cmd.extend(["--report-server-url", report_server_url])
+    return cmd, env, project_root
+
+
+def _start_server(
+    host: str,
+    port: int,
+    holdings: str | None,
+    reports_dir: str | None,
+    cache_dir: str | None,
+    report_server_url: str | None,
+) -> None:
+    pid = _read_pid(port)
+    if pid and _is_process_alive(pid):
+        console.print(f"[yellow]Server already running on port {port} (pid {pid}).[/yellow]")
+        raise typer.Exit(code=0)
+    if pid is not None:
+        _remove_pid(port)
+
+    cmd, env, project_root = _build_server_cmd(
+        host, port, holdings, reports_dir, cache_dir, report_server_url
+    )
+    log_file = _serve_log_file()
+    console.print(f"[green]Starting portfolio summary server on {host}:{port}...[/green]")
+
+    with open(log_file, "a") as log_fh:
+        proc = subprocess.Popen(
+            cmd,
+            cwd=project_root,
+            env=env,
+            stdout=log_fh,
+            stderr=subprocess.STDOUT,
+            start_new_session=True,
+        )
+
+    _write_pid(port, proc.pid)
+    time.sleep(0.5)
+    if proc.poll() is not None:
+        console.print(f"[red]Server failed to start. Check log: {log_file}[/red]")
+        _remove_pid(port)
+        raise typer.Exit(code=1)
+
+    console.print(f"[green]Server started (pid {proc.pid}). Log: {log_file}[/green]")
+
+
+def _stop_server(port: int) -> bool:
+    pid = _read_pid(port)
+    if pid is None or not _is_process_alive(pid):
+        console.print(f"[yellow]Server is not running on port {port}.[/yellow]")
+        if pid is not None:
+            _remove_pid(port)
+        return False
+
+    console.print(f"[yellow]Stopping server on port {port} (pid {pid})...[/yellow]")
     try:
-        subprocess.run(cmd, cwd=project_root, check=True, env=env)
-    except KeyboardInterrupt:
-        console.print("[yellow]Server stopped.[/yellow]")
-    except subprocess.CalledProcessError as e:
-        console.print(f"[red]Server exited with code {e.returncode}.[/red]")
-        raise typer.Exit(code=e.returncode) from e
+        os.kill(pid, signal.SIGTERM)
+    except ProcessLookupError:
+        _remove_pid(port)
+        return False
+
+    for _ in range(50):
+        if not _is_process_alive(pid):
+            break
+        time.sleep(0.1)
+
+    if _is_process_alive(pid):
+        console.print("[red]Server did not stop gracefully, sending SIGKILL.[/red]")
+        try:
+            os.kill(pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        for _ in range(20):
+            if not _is_process_alive(pid):
+                break
+            time.sleep(0.1)
+
+    _remove_pid(port)
+    console.print("[green]Server stopped.[/green]")
+    return True
+
+
+@serve_app.command("start")
+def serve_start(
+    host: str = typer.Option("127.0.0.1", "--host", "-h", help="Bind host"),
+    port: int = typer.Option(5000, "--port", "-p", help="Bind port"),
+    holdings: str | None = typer.Option(None, "--holdings", help="Path to portfolio holdings JSON"),
+    reports_dir: str | None = typer.Option(None, "--reports-dir", help="Path to reports directory"),
+    cache_dir: str | None = typer.Option(None, "--cache-dir", help="Path to cache directory"),
+    report_server_url: str | None = typer.Option(
+        None, "--report-server-url", help="Base URL of the report server for detail links"
+    ),
+):
+    """Start the portfolio summary web server in the background."""
+    _start_server(host, port, holdings, reports_dir, cache_dir, report_server_url)
+
+
+@serve_app.command("stop")
+def serve_stop(
+    port: int = typer.Option(5000, "--port", "-p", help="Bind port"),
+):
+    """Stop the portfolio summary web server."""
+    _stop_server(port)
+
+
+@serve_app.command("restart")
+def serve_restart(
+    host: str = typer.Option("127.0.0.1", "--host", "-h", help="Bind host"),
+    port: int = typer.Option(5000, "--port", "-p", help="Bind port"),
+    holdings: str | None = typer.Option(None, "--holdings", help="Path to portfolio holdings JSON"),
+    reports_dir: str | None = typer.Option(None, "--reports-dir", help="Path to reports directory"),
+    cache_dir: str | None = typer.Option(None, "--cache-dir", help="Path to cache directory"),
+    report_server_url: str | None = typer.Option(
+        None, "--report-server-url", help="Base URL of the report server for detail links"
+    ),
+):
+    """Restart the portfolio summary web server."""
+    _stop_server(port)
+    _start_server(host, port, holdings, reports_dir, cache_dir, report_server_url)
+
+
+@serve_app.command("status")
+def serve_status(
+    port: int = typer.Option(5000, "--port", "-p", help="Bind port"),
+):
+    """Show whether the portfolio summary web server is running."""
+    pid = _read_pid(port)
+    if pid and _is_process_alive(pid):
+        console.print(f"[green]Server is running on port {port} (pid {pid}).[/green]")
+    else:
+        console.print(f"[yellow]Server is not running on port {port}.[/yellow]")
+        if pid is not None:
+            _remove_pid(port)
 
 
 @app.command(name="analyze-portfolio")
