@@ -73,13 +73,42 @@ _KEY_INDICATORS = [
     "SMA200",
     "VWMA",
     "HullMA9",
-    # Bands / pivots
+    # Bands
     "BB.lower",
     "BB.upper",
     "P.SAR",
+    # Pivot points (Classic / Fibonacci / Camarilla / Woodie / Demark)
+    "Pivot.M.Classic.S3",
+    "Pivot.M.Classic.S2",
     "Pivot.M.Classic.S1",
     "Pivot.M.Classic.Middle",
     "Pivot.M.Classic.R1",
+    "Pivot.M.Classic.R2",
+    "Pivot.M.Classic.R3",
+    "Pivot.M.Fibonacci.S3",
+    "Pivot.M.Fibonacci.S2",
+    "Pivot.M.Fibonacci.S1",
+    "Pivot.M.Fibonacci.Middle",
+    "Pivot.M.Fibonacci.R1",
+    "Pivot.M.Fibonacci.R2",
+    "Pivot.M.Fibonacci.R3",
+    "Pivot.M.Camarilla.S3",
+    "Pivot.M.Camarilla.S2",
+    "Pivot.M.Camarilla.S1",
+    "Pivot.M.Camarilla.Middle",
+    "Pivot.M.Camarilla.R1",
+    "Pivot.M.Camarilla.R2",
+    "Pivot.M.Camarilla.R3",
+    "Pivot.M.Woodie.S3",
+    "Pivot.M.Woodie.S2",
+    "Pivot.M.Woodie.S1",
+    "Pivot.M.Woodie.Middle",
+    "Pivot.M.Woodie.R1",
+    "Pivot.M.Woodie.R2",
+    "Pivot.M.Woodie.R3",
+    "Pivot.M.Demark.S1",
+    "Pivot.M.Demark.Middle",
+    "Pivot.M.Demark.R1",
 ]
 
 
@@ -129,6 +158,44 @@ def _format_value(value: Any) -> str:
             return str(value)
         return f"{value:.4f}" if abs(value) < 0.1 else f"{value:.2f}"
     return str(value)
+
+
+def _format_pivot_table(indicators: dict[str, Any]) -> list[str]:
+    """Format pivot point levels (Classic/Fibonacci/Camarilla/Woodie/DM) into a table."""
+    methods = {
+        "Classic": "Pivot.M.Classic.",
+        "Fibonacci": "Pivot.M.Fibonacci.",
+        "Camarilla": "Pivot.M.Camarilla.",
+        "Woodie": "Pivot.M.Woodie.",
+        "DM": "Pivot.M.Demark.",
+    }
+    # TradingView names the pivot point "Middle" rather than "P".
+    level_display = ["S3", "S2", "S1", "P", "R1", "R2", "R3"]
+    level_keys = ["S3", "S2", "S1", "Middle", "R1", "R2", "R3"]
+
+    has_pivots = any(
+        indicators.get(prefix + key) is not None
+        for prefix in methods.values()
+        for key in level_keys
+        if key != "Middle" or "Demark" not in prefix
+    )
+    if not has_pivots:
+        return []
+
+    lines = ["", "Pivot points:"]
+    header = f"{'':<10}" + "".join(f"{lvl:>10}" for lvl in level_display)
+    lines.append(header)
+    for name, prefix in methods.items():
+        row: list[str] = []
+        for key in level_keys:
+            if name == "DM" and key in ("S3", "S2", "R2", "R3"):
+                row.append("—")
+                continue
+            full_key = prefix + key
+            value = indicators.get(full_key)
+            row.append(_format_value(value) if value is not None else "—")
+        lines.append(f"{name:<10}" + "".join(f"{v:>10}" for v in row))
+    return lines
 
 
 def _fetch_analysis(symbol: str, curr_date: str) -> dict[str, Any]:
@@ -225,14 +292,10 @@ def _format_analysis(data: dict[str, Any], curr_date: str) -> str:
             for k in band_keys
             if k in indicators
         ]
-        pivot_keys = ["Pivot.M.Classic.S1", "Pivot.M.Classic.Middle", "Pivot.M.Classic.R1"]
-        pivot_parts = [
-            f"{k.replace('Pivot.M.Classic.', '')}={_format_value(indicators[k])}"
-            for k in pivot_keys
-            if k in indicators
-        ]
-        if band_parts or pivot_parts:
-            lines.append(f"  Bands/Pivots: {'  '.join(band_parts + pivot_parts)}")
+        if band_parts:
+            lines.append(f"  Bands: {'  '.join(band_parts)}")
+
+        lines.extend(_format_pivot_table(indicators))
 
     return "\n".join(lines)
 
@@ -248,10 +311,11 @@ def get_tradingview_ta(
     oscillator and moving-average vote breakdown.  Key raw indicator values
     (RSI, MACD, moving averages, Bollinger Bands, pivot points, etc.) are
     also included so the analyst can reason about magnitude, not just vote
-    direction.  Results are cached in SQLite by (symbol, date); a cache hit
-    avoids a network request.  Network or mapping failures are raised (not
-    swallowed) so the pipeline fails fast and the error is logged by the
-    caller.
+    direction.  Pivot levels for Classic, Fibonacci, Camarilla, Woodie and
+    Demark methods are shown in a dedicated table.  Results are cached in
+    SQLite by (symbol, date); a cache hit avoids a network request.  Network
+    or mapping failures are raised (not swallowed) so the pipeline fails fast
+    and the error is logged by the caller.
     """
     cached = load_ta(symbol, curr_date)
     if cached is not None:
