@@ -87,24 +87,32 @@ def _get_recent_signals(ticker: str, reports_dir: Path, target_date: str, days: 
     Missing days are marked as "X".
     """
     ticker_dir = reports_dir / ticker
-    date_to_rating: dict[str, str] = {}
+    recent_dates_set = set(_recent_dates(target_date, days))
+    date_to_reports: dict[str, list[tuple[str, Path]]] = {}
     if ticker_dir.exists():
         for d in ticker_dir.iterdir():
             if not d.is_dir():
                 continue
             date = d.name[:10]
-            if date > target_date or not _recent_dates(target_date, days).__contains__(date):
+            if date > target_date or date not in recent_dates_set:
                 continue
             complete = d / "complete_report.md"
             if not complete.exists():
                 continue
-            try:
-                text = complete.read_text(encoding="utf-8")
-                pm = _extract_section(text, "V. Portfolio Manager Decision")
-                rating = _extract_pm_rating(pm)
-                date_to_rating[date] = rating
-            except Exception:
-                continue
+            date_to_reports.setdefault(date, []).append((d.name, complete))
+
+    date_to_rating: dict[str, str] = {}
+    for date, reports in date_to_reports.items():
+        # Use the latest report for the date (name is YYYY-MM-DD_HHMMSS).
+        reports.sort(key=lambda item: item[0])
+        latest_path = reports[-1][1]
+        try:
+            text = latest_path.read_text(encoding="utf-8")
+            pm = _extract_section(text, "V. Portfolio Manager Decision")
+            rating = _extract_pm_rating(pm)
+            date_to_rating[date] = rating
+        except Exception:
+            continue
 
     result = []
     for date in _recent_dates(target_date, days):
@@ -392,6 +400,7 @@ def _build_lightweight_chart(
         return ""
 
     candles = []
+    prev_close: float | None = None
     for _, row in df.iterrows():
         date_val = pd.to_datetime(row["Date"], errors="coerce")
         if pd.isna(date_val):
@@ -402,13 +411,28 @@ def _build_lightweight_chart(
         c = float(row["Close"])
         if any(math.isnan(v) for v in (o, h, l, c)):
             continue
+        v = float(row["Volume"]) if "Volume" in df.columns and not pd.isna(row["Volume"]) else None
+        if v is not None and math.isnan(v):
+            v = None
+
+        change = (c - prev_close) if prev_close is not None else None
+        change_pct = (change / prev_close * 100) if prev_close else None
+        amplitude = ((h - l) / prev_close * 100) if prev_close else None
+        turnover = (v * c) if v is not None else None
+
         candles.append({
             "time": date_val.strftime("%Y-%m-%d"),
             "open": round(o, 4),
             "high": round(h, 4),
             "low": round(l, 4),
             "close": round(c, 4),
+            "volume": v,
+            "change": round(change, 4) if change is not None else None,
+            "changePct": round(change_pct, 4) if change_pct is not None else None,
+            "amplitude": round(amplitude, 4) if amplitude is not None else None,
+            "turnover": round(turnover, 4) if turnover is not None else None,
         })
+        prev_close = c
 
     markers = []
     trades_by_date: dict[str, list[dict]] = {}
@@ -457,6 +481,12 @@ def _build_lightweight_chart(
         '<div class="ohlc-row"><span>高</span><span class="ohlc-high"></span></div>'
         '<div class="ohlc-row"><span>低</span><span class="ohlc-low"></span></div>'
         '<div class="ohlc-row"><span>收</span><span class="ohlc-close"></span></div>'
+        '<div class="ohlc-row"><span>涨跌额</span><span class="ohlc-change"></span></div>'
+        '<div class="ohlc-row"><span>涨跌幅</span><span class="ohlc-change-pct"></span></div>'
+        '<div class="ohlc-row"><span>成交量</span><span class="ohlc-volume"></span></div>'
+        '<div class="ohlc-row"><span>成交额</span><span class="ohlc-turnover"></span></div>'
+        '<div class="ohlc-row"><span>振幅</span><span class="ohlc-amplitude"></span></div>'
+        '<div class="ohlc-row"><span>换手率</span><span class="ohlc-turnover-rate">—</span></div>'
         '<div class="tooltip-body"></div>'
         '<div class="tooltip-summary"></div>'
         '</div>'
@@ -511,17 +541,43 @@ def _build_lightweight_chart(
         '    }\n'
         '\n'
         '    var tradesByDate = ' + trades_by_date_json + ';\n'
+        '    var candlesData = ' + candles_json + ';\n'
+        '    var candleMap = {};\n'
+        '    candlesData.forEach(function(c) { candleMap[c.time] = c; });\n'
         '    var tooltip = container.querySelector(".chart-tooltip.trade-tooltip");\n'
         '    var titleEl = tooltip.querySelector(".tooltip-title");\n'
         '    var openEl = tooltip.querySelector(".ohlc-open");\n'
         '    var highEl = tooltip.querySelector(".ohlc-high");\n'
         '    var lowEl = tooltip.querySelector(".ohlc-low");\n'
         '    var closeEl = tooltip.querySelector(".ohlc-close");\n'
+        '    var changeEl = tooltip.querySelector(".ohlc-change");\n'
+        '    var changePctEl = tooltip.querySelector(".ohlc-change-pct");\n'
+        '    var volumeEl = tooltip.querySelector(".ohlc-volume");\n'
+        '    var turnoverEl = tooltip.querySelector(".ohlc-turnover");\n'
+        '    var amplitudeEl = tooltip.querySelector(".ohlc-amplitude");\n'
         '    var bodyEl = tooltip.querySelector(".tooltip-body");\n'
         '    var summaryEl = tooltip.querySelector(".tooltip-summary");\n'
         '\n'
         '    function fmtSide(side) {\n'
         '        return { cls: side === "buy" ? "side-buy" : "side-sell", text: side === "buy" ? "买入" : "卖出" };\n'
+        '    }\n'
+        '    function fmtBigNumber(n) {\n'
+        '        if (n === null || n === undefined || isNaN(n)) return "—";\n'
+        '        if (Math.abs(n) >= 1e8) return (n / 1e8).toFixed(2) + "亿";\n'
+        '        if (Math.abs(n) >= 1e4) return (n / 1e4).toFixed(2) + "万";\n'
+        '        return n.toFixed(2);\n'
+        '    }\n'
+        '    function fmtSigned(n, suffix) {\n'
+        '        suffix = suffix || "";\n'
+        '        if (n === null || n === undefined || isNaN(n)) return "—";\n'
+        '        return (n > 0 ? "+" : "") + n.toFixed(2) + suffix;\n'
+        '    }\n'
+        '    function setPnlClass(el, n) {\n'
+        '        el.classList.remove("profit", "loss", "neutral");\n'
+        '        if (n === null || n === undefined || isNaN(n)) el.classList.add("neutral");\n'
+        '        else if (n > 0) el.classList.add("profit");\n'
+        '        else if (n < 0) el.classList.add("loss");\n'
+        '        else el.classList.add("neutral");\n'
         '    }\n'
         '\n'
         '    chart.subscribeCrosshairMove(function(param) {\n'
@@ -535,11 +591,19 @@ def _build_lightweight_chart(
         '            return;\n'
         '        }\n'
         '        var timeStr = typeof param.time === "string" ? param.time : new Date(param.time * 1000).toISOString().slice(0, 10);\n'
+        '        var candle = candleMap[timeStr] || {};\n'
         '        titleEl.textContent = timeStr.replace(/-/g, "/");\n'
         '        openEl.textContent = data.open.toFixed(2);\n'
         '        highEl.textContent = data.high.toFixed(2);\n'
         '        lowEl.textContent = data.low.toFixed(2);\n'
         '        closeEl.textContent = data.close.toFixed(2);\n'
+        '        changeEl.textContent = fmtSigned(candle.change);\n'
+        '        setPnlClass(changeEl, candle.change);\n'
+        '        changePctEl.textContent = fmtSigned(candle.changePct, "%");\n'
+        '        setPnlClass(changePctEl, candle.changePct);\n'
+        '        volumeEl.textContent = fmtBigNumber(candle.volume);\n'
+        '        turnoverEl.textContent = fmtBigNumber(candle.turnover);\n'
+        '        amplitudeEl.textContent = candle.amplitude !== null && candle.amplitude !== undefined && !isNaN(candle.amplitude) ? candle.amplitude.toFixed(2) + "%" : "—";\n'
         '\n'
         '        bodyEl.innerHTML = "";\n'
         '        var entries = tradesByDate[timeStr];\n'
@@ -558,7 +622,7 @@ def _build_lightweight_chart(
         '        summaryEl.textContent = totalQty ? ("共 " + totalQty + " 股 · 均价 " + (totalAmount / totalQty).toFixed(2)) : "";\n'
         '        summaryEl.style.display = totalQty ? "block" : "none";\n'
         '\n'
-        '        var tw = 200, th = 100, margin = 12;\n'
+        '        var tw = 200, th = 220, margin = 12;\n'
         '        var left = param.point.x + margin;\n'
         '        var top = param.point.y + margin;\n'
         '        if (left + tw > container.clientWidth) left = param.point.x - tw - margin;\n'
@@ -640,8 +704,9 @@ def _build_signal_activity_html(
     date_labels = [d[8:] for d in dates]  # show day only
 
     rows_html: list[str] = []
-    for ticker in tickers:
+    for row_idx, ticker in enumerate(tickers):
         display_name = html.escape(ticker_names.get(ticker, ticker))
+        row_cls = " activity-row-first" if row_idx == 0 else ""
         signals = _get_recent_signals(ticker, reports_dir, target_date, days)
         sig_by_date = {s["date"]: s["rating"] for s in signals}
         outcomes_by_date = (
@@ -660,7 +725,7 @@ def _build_signal_activity_html(
             rating = sig_by_date.get(d, "X")
             rating_cls = _rating_class(rating)
             if rating == "X" or not rating_cls:
-                tooltip = f"{display_name} · {d} 无信号"
+                tooltip = f"{display_name}&#10;{d} 无信号"
                 cells.append(
                     f'<div class="activity-cell{week_cls}" data-tooltip="{tooltip}">'
                     f'<div class="signal-block activity-empty"></div></div>'
@@ -682,14 +747,13 @@ def _build_signal_activity_html(
                             sign = "+" if ret > 0 else ""
                             ret_labels.append(f"+{i}日 {sign}{ret:.1f}%")
                 outcome_html = f'<div class="outcome-strip">{"".join(segments)}</div>'
-                outcome_tip = " · " + " · ".join(ret_labels)
-                tooltip = f"{display_name} · {d} {html.escape(rating)}{outcome_tip}"
+                tooltip = f"{display_name}&#10;{d} {html.escape(rating)}&#10;" + "&#10;".join(ret_labels)
                 cells.append(
                     f'<div class="activity-cell{week_cls}" data-tooltip="{tooltip}">'
                     f'<div class="signal-block {rating_cls}"></div>{outcome_html}</div>'
                 )
         rows_html.append(
-            '<div class="activity-row">'
+            f'<div class="activity-row{row_cls}">'
             f'<div class="activity-ticker" title="{html.escape(ticker)}">{display_name}</div>'
             + "".join(cells)
             + "</div>"
@@ -1353,13 +1417,16 @@ def _base_styles() -> str:
             bottom: 100%;
             left: 50%;
             transform: translateX(-50%) translateY(-4px);
-            padding: 5px 8px;
+            padding: 6px 10px;
             background: rgba(31, 35, 40, 0.95);
             color: #f6f7f9;
             font-family: var(--font-mono);
-            font-size: 10px;
-            white-space: normal;
-            max-width: 220px;
+            font-size: 11px;
+            line-height: 1.5;
+            white-space: pre-line;
+            width: max-content;
+            min-width: 80px;
+            max-width: 280px;
             text-align: left;
             border-radius: 5px;
             pointer-events: none;
@@ -1368,6 +1435,12 @@ def _base_styles() -> str:
             transition: opacity 0.15s ease, visibility 0.15s ease;
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
             z-index: 100;
+        }
+
+        .activity-row.activity-row-first .activity-cell::after {
+            bottom: auto;
+            top: 100%;
+            transform: translateX(-50%) translateY(12px);
         }
 
         .activity-cell .outcome-strip {
@@ -1815,6 +1888,10 @@ def _base_styles() -> str:
         }
 
         .trade-tooltip .ohlc-row span:first-child { color: #9aa0a6; }
+
+        .trade-tooltip .ohlc-row .profit { color: #d93026; }
+        .trade-tooltip .ohlc-row .loss { color: #1e8e3e; }
+        .trade-tooltip .ohlc-row .neutral { color: #9aa0a6; }
 
         .trade-tooltip .tooltip-body {
             margin-top: 8px;
