@@ -23,12 +23,14 @@ from tradingagents.agents.utils.news_data_tools import (
 )
 from tradingagents.agents.utils.prediction_markets_tools import get_prediction_markets
 from tradingagents.agents.utils.technical_indicators_tools import get_indicators
+from tradingagents.agents.utils.tradingview_ta_tools import get_tradingview_ta
 
 # Public surface: the data tools are imported here so agents and the graph
 # import them from one place, plus the instrument/language helpers defined below.
 __all__ = [
     "get_stock_data",
     "get_indicators",
+    "get_tradingview_ta",
     "get_fundamentals",
     "get_balance_sheet",
     "get_cashflow",
