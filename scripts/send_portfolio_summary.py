@@ -17,7 +17,7 @@ import html
 import json
 import math
 import re
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 import pandas as pd
@@ -658,6 +658,24 @@ def _pnl_class(value: float | None) -> str:
     return "neutral"
 
 
+def _cum_returns(returns: list[float | None]) -> list[float | None]:
+    """Return cumulative returns (%) from a list of daily returns (%).
+
+    ``None`` values short-circuit the cumulative chain; subsequent values are
+    also reported as ``None`` because the compounded return is undefined.
+    """
+    cum: list[float | None] = []
+    product: float | None = 1.0
+    for ret in returns:
+        if ret is None or product is None:
+            cum.append(None)
+            product = None
+        else:
+            product *= 1 + ret / 100
+            cum.append((product - 1) * 100)
+    return cum
+
+
 def _rating_class(rating: str) -> str:
     text = rating.lower()
     if "buy" in text:
@@ -709,8 +727,9 @@ def _build_signal_activity_html(
         row_cls = " activity-row-first" if row_idx == 0 else ""
         signals = _get_recent_signals(ticker, reports_dir, target_date, days)
         sig_by_date = {s["date"]: s["rating"] for s in signals}
+        # Load an extra week of outcomes so we can show week-over-week comparison.
         outcomes_by_date = (
-            _get_signal_outcomes(ticker, cache_dir, target_date, days)
+            _get_signal_outcomes(ticker, cache_dir, target_date, days + 7)
             if cache_dir else {}
         )
         cells: list[str] = []
@@ -738,14 +757,45 @@ def _build_signal_activity_html(
                 else:
                     segments = []
                     ret_labels = []
-                    for i, ret in enumerate(returns, start=1):
+                    cum = _cum_returns(returns)
+                    for i, (ret, cret) in enumerate(zip(returns, cum), start=1):
                         if ret is None:
                             segments.append('<span class="outcome-day placeholder"></span>')
                             ret_labels.append(f"+{i}日 无数据")
                         else:
                             segments.append(f'<span class="outcome-day {_pnl_class(ret)}"></span>')
                             sign = "+" if ret > 0 else ""
-                            ret_labels.append(f"+{i}日 {sign}{ret:.1f}%")
+                            if cret is None:
+                                ret_labels.append(f"+{i}日 {sign}{ret:.1f}%  累计 无数据")
+                            else:
+                                csign = "+" if cret > 0 else ""
+                                ret_labels.append(
+                                    f"+{i}日 {sign}{ret:.1f}%  累计 {csign}{cret:.1f}%"
+                                )
+
+                # Week-over-week comparison: same ticker, 7 calendar days earlier.
+                prev_dt = datetime.strptime(d, "%Y-%m-%d") - timedelta(days=7)
+                prev_d = prev_dt.strftime("%Y-%m-%d")
+                prev_returns = outcomes_by_date.get(prev_d)
+                ret_labels.append("")
+                if prev_returns is None:
+                    ret_labels.append(f"上周 {prev_d} 无信号/无数据")
+                else:
+                    ret_labels.append(f"上周 {prev_d}")
+                    prev_cum = _cum_returns(prev_returns)
+                    for i, (ret, cret) in enumerate(zip(prev_returns, prev_cum), start=1):
+                        if ret is None:
+                            ret_labels.append(f"  +{i}日 无数据")
+                        else:
+                            sign = "+" if ret > 0 else ""
+                            if cret is None:
+                                ret_labels.append(f"  +{i}日 {sign}{ret:.1f}%  累计 无数据")
+                            else:
+                                csign = "+" if cret > 0 else ""
+                                ret_labels.append(
+                                    f"  +{i}日 {sign}{ret:.1f}%  累计 {csign}{cret:.1f}%"
+                                )
+
                 outcome_html = f'<div class="outcome-strip">{"".join(segments)}</div>'
                 tooltip = f"{display_name}&#10;{d} {html.escape(rating)}&#10;" + "&#10;".join(ret_labels)
                 cells.append(
