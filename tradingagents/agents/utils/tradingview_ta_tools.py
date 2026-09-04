@@ -31,6 +31,10 @@ _US_EXCHANGE_MAP = {
     "BATS": "BATS",
 }
 
+# Cache format version.  Bump this whenever the set of cached fields changes
+# so that stale rows are automatically refreshed.
+_CACHE_VERSION = 2
+
 # Curated list of raw indicator values exposed to the LLM.  These are the
 # most commonly referenced figures when turning a vote-based consensus into
 # a nuanced technical view.
@@ -148,6 +152,18 @@ def _extract_key_indicators(indicators: dict[str, Any]) -> dict[str, Any]:
     return extracted
 
 
+def _cache_is_valid(cached: dict[str, Any] | None) -> bool:
+    """Return True if the cached row matches the current format version.
+
+    A cache hit is only valid when the stored ``cache_version`` matches the
+    current format.  Pivot points are computed locally from OHLC on every
+    call, so they do not need to be present in the cached row.
+    """
+    if cached is None:
+        return False
+    return cached.get("cache_version", 0) >= _CACHE_VERSION
+
+
 def _format_value(value: Any) -> str:
     """Format a single indicator value for readability."""
     if isinstance(value, (int, float)):
@@ -227,8 +243,118 @@ def _fetch_analysis(symbol: str, curr_date: str) -> dict[str, Any]:
         "moving_averages": dict(analysis.moving_averages["COMPUTE"]),
         "indicators": _extract_key_indicators(analysis.indicators),
     }
-    store_ta(symbol, curr_date, data)
+    store_ta(symbol, curr_date, data, cache_version=_CACHE_VERSION)
     return data
+
+
+def _get_prior_day_ohlc(symbol: str, curr_date: str) -> dict[str, float] | None:
+    """Return OHLC for the trading day immediately before ``curr_date``."""
+    norm = normalize_symbol(symbol)
+    try:
+        # Request enough history ending at curr_date to cover weekends/holidays.
+        df = yf.Ticker(norm).history(period="20d", end=curr_date)
+        if df.empty or len(df) < 1:
+            return None
+        row = df.iloc[-1]
+        return {
+            "open": float(row["Open"]),
+            "high": float(row["High"]),
+            "low": float(row["Low"]),
+            "close": float(row["Close"]),
+        }
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(
+            "Could not load prior-day OHLC for %s before %s: %s", symbol, curr_date, exc
+        )
+        return None
+
+
+def _compute_pivot_points(ohlc: dict[str, float]) -> dict[str, Any]:
+    """Compute pivot-point levels for Classic, Fibonacci, Camarilla, Woodie and Demark."""
+    o, h, l, c = ohlc["open"], ohlc["high"], ohlc["low"], ohlc["close"]
+    rng = h - l
+
+    # Classic
+    classic_p = (h + l + c) / 3
+    classic = {
+        "Pivot.M.Classic.S3": l - 2 * (h - classic_p),
+        "Pivot.M.Classic.S2": classic_p - rng,
+        "Pivot.M.Classic.S1": 2 * classic_p - h,
+        "Pivot.M.Classic.Middle": classic_p,
+        "Pivot.M.Classic.R1": 2 * classic_p - l,
+        "Pivot.M.Classic.R2": classic_p + rng,
+        "Pivot.M.Classic.R3": h + 2 * (classic_p - l),
+    }
+
+    # Fibonacci
+    fib = {
+        "Pivot.M.Fibonacci.S3": classic_p - 1.000 * rng,
+        "Pivot.M.Fibonacci.S2": classic_p - 0.618 * rng,
+        "Pivot.M.Fibonacci.S1": classic_p - 0.382 * rng,
+        "Pivot.M.Fibonacci.Middle": classic_p,
+        "Pivot.M.Fibonacci.R1": classic_p + 0.382 * rng,
+        "Pivot.M.Fibonacci.R2": classic_p + 0.618 * rng,
+        "Pivot.M.Fibonacci.R3": classic_p + 1.000 * rng,
+    }
+
+    # Camarilla
+    cam = {
+        "Pivot.M.Camarilla.S3": c - rng * 1.1 / 4,
+        "Pivot.M.Camarilla.S2": c - rng * 1.1 / 6,
+        "Pivot.M.Camarilla.S1": c - rng * 1.1 / 12,
+        "Pivot.M.Camarilla.Middle": classic_p,
+        "Pivot.M.Camarilla.R1": c + rng * 1.1 / 12,
+        "Pivot.M.Camarilla.R2": c + rng * 1.1 / 6,
+        "Pivot.M.Camarilla.R3": c + rng * 1.1 / 4,
+    }
+
+    # Woodie
+    woodie_p = (h + l + 2 * c) / 4
+    woodie = {
+        "Pivot.M.Woodie.S3": l - 2 * (h - woodie_p),
+        "Pivot.M.Woodie.S2": woodie_p - rng,
+        "Pivot.M.Woodie.S1": 2 * woodie_p - h,
+        "Pivot.M.Woodie.Middle": woodie_p,
+        "Pivot.M.Woodie.R1": 2 * woodie_p - l,
+        "Pivot.M.Woodie.R2": woodie_p + rng,
+        "Pivot.M.Woodie.R3": h + 2 * (woodie_p - l),
+    }
+
+    # Demark
+    if c < o:
+        x = h + 2 * l + c
+    elif c > o:
+        x = 2 * h + l + c
+    else:
+        x = h + l + 2 * c
+    demark_p = x / 4
+    demark = {
+        "Pivot.M.Demark.S1": x / 2 - h,
+        "Pivot.M.Demark.Middle": demark_p,
+        "Pivot.M.Demark.R1": x / 2 - l,
+    }
+
+    result = {**classic, **fib, **cam, **woodie, **demark}
+    return {k: round(v, 2) for k, v in result.items()}
+
+
+def _ensure_pivot_points(data: dict[str, Any], symbol: str, curr_date: str) -> None:
+    """Overlay locally-computed pivot points onto ``data["indicators"]``.
+
+    Pivot points are deterministic functions of the prior day's OHLC, so we
+    compute them on every tool call rather than relying on TradingView's API
+    or the SQLite cache.  This guarantees the table is always populated and
+    removes cache-staleness concerns for pivot data.
+    """
+    ohlc = _get_prior_day_ohlc(symbol, curr_date)
+    if ohlc is None:
+        logger.warning(
+            "Skipping local pivot computation for %s on %s: no prior-day OHLC", symbol, curr_date
+        )
+        return
+    pivots = _compute_pivot_points(ohlc)
+    indicators = data.setdefault("indicators", {})
+    indicators.update(pivots)
 
 
 def _format_analysis(data: dict[str, Any], curr_date: str) -> str:
@@ -312,15 +438,26 @@ def get_tradingview_ta(
     (RSI, MACD, moving averages, Bollinger Bands, pivot points, etc.) are
     also included so the analyst can reason about magnitude, not just vote
     direction.  Pivot levels for Classic, Fibonacci, Camarilla, Woodie and
-    Demark methods are shown in a dedicated table.  Results are cached in
-    SQLite by (symbol, date); a cache hit avoids a network request.  Network
-    or mapping failures are raised (not swallowed) so the pipeline fails fast
-    and the error is logged by the caller.
+    Demark methods are computed locally from the prior day's OHLC and shown
+    in a dedicated table.  Results are cached in SQLite by (symbol, date); a
+    cache hit avoids the TradingView network request, but pivots are always
+    recomputed locally on every call.  Network or mapping failures are raised
+    (not swallowed) so the pipeline fails fast and the error is logged by the
+    caller.
     """
     cached = load_ta(symbol, curr_date)
-    if cached is not None:
+    if _cache_is_valid(cached):
         logger.info("Using cached TradingView TA for %s on %s", symbol, curr_date)
+        _ensure_pivot_points(cached, symbol, curr_date)
         return _format_analysis(cached, curr_date)
 
+    if cached is not None:
+        logger.info(
+            "TradingView TA cache for %s on %s is stale (old version); re-fetching",
+            symbol,
+            curr_date,
+        )
+
     data = _fetch_analysis(symbol, curr_date)
+    _ensure_pivot_points(data, symbol, curr_date)
     return _format_analysis(data, curr_date)

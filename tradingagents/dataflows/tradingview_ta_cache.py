@@ -18,9 +18,11 @@ from tradingagents.dataflows.utils import safe_ticker_component
 
 logger = logging.getLogger(__name__)
 
-# Schema evolution: the ``indicators`` column was added after the initial
-# release.  We create it on new databases and migrate existing tables via
-# ALTER TABLE when the column is missing.
+# Schema evolution notes:
+#   v1: initial schema with recommendation, votes, oscillators, moving_averages.
+#   v2: added ``indicators`` raw-value column.
+#   v3: added ``cache_version`` column so consumers can invalidate stale rows
+#       when the set of cached fields changes.
 _INIT_SQL = """
 CREATE TABLE IF NOT EXISTS tradingview_ta (
     symbol TEXT NOT NULL,
@@ -32,6 +34,7 @@ CREATE TABLE IF NOT EXISTS tradingview_ta (
     oscillators TEXT,
     moving_averages TEXT,
     indicators TEXT,
+    cache_version INTEGER DEFAULT 1,
     cached_at REAL NOT NULL,
     PRIMARY KEY (symbol, date)
 );
@@ -42,6 +45,10 @@ CREATE INDEX IF NOT EXISTS idx_tradingview_ta_symbol_date
 
 _MIGRATE_ADD_INDICATORS = """
 ALTER TABLE tradingview_ta ADD COLUMN indicators TEXT;
+"""
+
+_MIGRATE_ADD_CACHE_VERSION = """
+ALTER TABLE tradingview_ta ADD COLUMN cache_version INTEGER DEFAULT 1;
 """
 
 
@@ -56,14 +63,15 @@ def _now_ts() -> float:
 
 
 def _ensure_schema(conn: sqlite3.Connection) -> None:
-    """Create the table and migrate older schemas that lack ``indicators``."""
+    """Create the table and migrate older schemas that lack columns."""
     conn.executescript(_INIT_SQL)
-    try:
-        conn.execute(_MIGRATE_ADD_INDICATORS)
-        conn.commit()
-    except sqlite3.OperationalError:
-        # Column already exists — safe to ignore.
-        pass
+    for migration in (_MIGRATE_ADD_INDICATORS, _MIGRATE_ADD_CACHE_VERSION):
+        try:
+            conn.execute(migration)
+            conn.commit()
+        except sqlite3.OperationalError:
+            # Column already exists — safe to ignore.
+            pass
 
 
 def _get_connection() -> sqlite3.Connection:
@@ -95,6 +103,7 @@ def load_ta(symbol: str, date: str) -> dict[str, Any] | None:
                     "oscillators": json.loads(row["oscillators"] or "{}"),
                     "moving_averages": json.loads(row["moving_averages"] or "{}"),
                     "indicators": json.loads(row["indicators"] or "{}"),
+                    "cache_version": row["cache_version"],
                     "cached_at": row["cached_at"],
                 }
     except Exception as exc:  # noqa: BLE001 — cache read failures are non-fatal
@@ -102,7 +111,7 @@ def load_ta(symbol: str, date: str) -> dict[str, Any] | None:
     return None
 
 
-def store_ta(symbol: str, date: str, data: dict[str, Any]) -> None:
+def store_ta(symbol: str, date: str, data: dict[str, Any], cache_version: int = 1) -> None:
     """Store (or replace) TA data for ``symbol`` on ``date``."""
     norm = _normalize_symbol(symbol)
     oscillators = json.dumps(data.get("oscillators", {}), ensure_ascii=False)
@@ -114,9 +123,9 @@ def store_ta(symbol: str, date: str, data: dict[str, Any]) -> None:
                 """
                 INSERT INTO tradingview_ta (
                     symbol, date, recommendation, buy_votes, sell_votes, neutral_votes,
-                    oscillators, moving_averages, indicators, cached_at
+                    oscillators, moving_averages, indicators, cache_version, cached_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(symbol, date) DO UPDATE SET
                     recommendation=excluded.recommendation,
                     buy_votes=excluded.buy_votes,
@@ -125,6 +134,7 @@ def store_ta(symbol: str, date: str, data: dict[str, Any]) -> None:
                     oscillators=excluded.oscillators,
                     moving_averages=excluded.moving_averages,
                     indicators=excluded.indicators,
+                    cache_version=excluded.cache_version,
                     cached_at=excluded.cached_at
                 """,
                 (
@@ -137,6 +147,7 @@ def store_ta(symbol: str, date: str, data: dict[str, Any]) -> None:
                     oscillators,
                     moving_averages,
                     indicators,
+                    cache_version,
                     _now_ts(),
                 ),
             )
