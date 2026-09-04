@@ -17,7 +17,7 @@ import html
 import json
 import math
 import re
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
 
 import pandas as pd
@@ -187,14 +187,14 @@ def _get_signal_outcomes(
     target_date: str,
     days: int = 30,
 ) -> dict[str, list[tuple[float | None, float | None]]]:
-    """Return close-to-close returns (%) for the 3 trading days after each signal date.
+    """Return close-to-close returns (%) after each signal date.
 
-    The returned dict maps a signal date (YYYY-MM-DD) to a list of three
-    ``(daily_return, cumulative_return)`` tuples.  The daily return is the
-    close-to-close move for that trading day; the cumulative return is the
-    total move from the signal-day close to that day's close
-    (``close_i / close_0 - 1``).  Missing future days are represented as
-    ``None``.
+    The returned dict maps a signal date (YYYY-MM-DD) to a list of six
+    ``(daily_return, cumulative_return)`` tuples for trading-day offsets
+    ``[1, 2, 3, 7, 8, 9]``.  The daily return is the close-to-close move for
+    that trading day; the cumulative return is the total move from the
+    signal-day close to that day's close (``close_i / close_0 - 1``).
+    Missing future days are represented as ``None``.
     """
     if not cache_dir or not cache_dir.exists():
         return {}
@@ -216,13 +216,14 @@ def _get_signal_outcomes(
     }
 
     outcomes: dict[str, list[tuple[float | None, float | None]]] = {}
+    offsets = [1, 2, 3, 7, 8, 9]
     for d in signal_dates:
         idx = date_to_idx.get(d)
         if idx is None:
             continue
         start_close = float(df.loc[idx, "Close"])
         results: list[tuple[float | None, float | None]] = []
-        for offset in range(1, 4):
+        for offset in offsets:
             nxt = idx + offset
             if nxt >= len(df):
                 results.append((None, None))
@@ -715,9 +716,8 @@ def _build_signal_activity_html(
         row_cls = " activity-row-first" if row_idx == 0 else ""
         signals = _get_recent_signals(ticker, reports_dir, target_date, days)
         sig_by_date = {s["date"]: s["rating"] for s in signals}
-        # Load an extra week of outcomes so we can show week-over-week comparison.
         outcomes_by_date = (
-            _get_signal_outcomes(ticker, cache_dir, target_date, days + 7)
+            _get_signal_outcomes(ticker, cache_dir, target_date, days)
             if cache_dir else {}
         )
         cells: list[str] = []
@@ -742,10 +742,14 @@ def _build_signal_activity_html(
                 if returns is None:
                     segments = ['<span class="outcome-day placeholder"></span>'] * 3
                     ret_labels = ["+1日 无数据", "+2日 无数据", "+3日 无数据"]
+                    future_labels: list[str] = []
                 else:
+                    # returns is [+1, +2, +3, +7, +8, +9] with (daily, cumulative).
+                    near = returns[:3]
+                    future = returns[3:]
                     segments = []
                     ret_labels = []
-                    for i, (ret, cret) in enumerate(returns, start=1):
+                    for i, (ret, cret) in enumerate(near, start=1):
                         if ret is None:
                             segments.append('<span class="outcome-day placeholder"></span>')
                             ret_labels.append(f"+{i}日 无数据")
@@ -760,29 +764,24 @@ def _build_signal_activity_html(
                                     f"+{i}日 {sign}{ret:.1f}%  累计 {csign}{cret:.1f}%"
                                 )
 
-                # Week-over-week comparison: same ticker, 7 calendar days earlier.
-                prev_dt = datetime.strptime(d, "%Y-%m-%d") - timedelta(days=7)
-                prev_d = prev_dt.strftime("%Y-%m-%d")
-                prev_returns = outcomes_by_date.get(prev_d)
-                ret_labels.append("")
-                if prev_returns is None:
-                    ret_labels.append(f"上周 {prev_d} 无信号/无数据")
-                else:
-                    ret_labels.append(f"上周 {prev_d}")
-                    for i, (ret, cret) in enumerate(prev_returns, start=1):
+                    future_labels = []
+                    future_labels.append("")
+                    future_labels.append("+7")
+                    for offset, (ret, cret) in zip([7, 8, 9], future):
                         if ret is None:
-                            ret_labels.append(f"  +{i}日 无数据")
+                            future_labels.append(f"  +{offset}日 无数据")
                         else:
                             sign = "+" if ret > 0 else ""
                             if cret is None:
-                                ret_labels.append(f"  +{i}日 {sign}{ret:.1f}%  累计 无数据")
+                                future_labels.append(f"  +{offset}日 {sign}{ret:.1f}%  累计 无数据")
                             else:
                                 csign = "+" if cret > 0 else ""
-                                ret_labels.append(
-                                    f"  +{i}日 {sign}{ret:.1f}%  累计 {csign}{cret:.1f}%"
+                                future_labels.append(
+                                    f"  +{offset}日 {sign}{ret:.1f}%  累计 {csign}{cret:.1f}%"
                                 )
 
                 outcome_html = f'<div class="outcome-strip">{"".join(segments)}</div>'
+                ret_labels.extend(future_labels)
                 tooltip = f"{display_name}&#10;{d} {html.escape(rating)}&#10;" + "&#10;".join(ret_labels)
                 cells.append(
                     f'<div class="activity-cell{week_cls}" data-tooltip="{tooltip}">'
