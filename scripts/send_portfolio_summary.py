@@ -186,12 +186,15 @@ def _get_signal_outcomes(
     cache_dir: Path,
     target_date: str,
     days: int = 30,
-) -> dict[str, list[float | None]]:
+) -> dict[str, list[tuple[float | None, float | None]]]:
     """Return close-to-close returns (%) for the 3 trading days after each signal date.
 
-    The returned dict maps a signal date (YYYY-MM-DD) to a list of three return
-    percentages for the next three available trading days.  Missing future days
-    are represented as ``None``.
+    The returned dict maps a signal date (YYYY-MM-DD) to a list of three
+    ``(daily_return, cumulative_return)`` tuples.  The daily return is the
+    close-to-close move for that trading day; the cumulative return is the
+    total move from the signal-day close to that day's close
+    (``close_i / close_0 - 1``).  Missing future days are represented as
+    ``None``.
     """
     if not cache_dir or not cache_dir.exists():
         return {}
@@ -212,24 +215,27 @@ def _get_signal_outcomes(
         for idx, row in enumerate(df["Date"])
     }
 
-    outcomes: dict[str, list[float | None]] = {}
+    outcomes: dict[str, list[tuple[float | None, float | None]]] = {}
     for d in signal_dates:
         idx = date_to_idx.get(d)
         if idx is None:
             continue
-        returns: list[float | None] = []
+        start_close = float(df.loc[idx, "Close"])
+        results: list[tuple[float | None, float | None]] = []
         for offset in range(1, 4):
             nxt = idx + offset
             if nxt >= len(df):
-                returns.append(None)
+                results.append((None, None))
                 continue
             prev_close = float(df.loc[nxt - 1, "Close"])
             close = float(df.loc[nxt, "Close"])
-            if prev_close:
-                returns.append((close - prev_close) / prev_close * 100)
+            if prev_close and start_close:
+                daily = (close - prev_close) / prev_close * 100
+                cumulative = (close - start_close) / start_close * 100
+                results.append((daily, cumulative))
             else:
-                returns.append(None)
-        outcomes[d] = returns
+                results.append((None, None))
+        outcomes[d] = results
     return outcomes
 
 
@@ -658,24 +664,6 @@ def _pnl_class(value: float | None) -> str:
     return "neutral"
 
 
-def _cum_returns(returns: list[float | None]) -> list[float | None]:
-    """Return cumulative returns (%) from a list of daily returns (%).
-
-    ``None`` values short-circuit the cumulative chain; subsequent values are
-    also reported as ``None`` because the compounded return is undefined.
-    """
-    cum: list[float | None] = []
-    product: float | None = 1.0
-    for ret in returns:
-        if ret is None or product is None:
-            cum.append(None)
-            product = None
-        else:
-            product *= 1 + ret / 100
-            cum.append((product - 1) * 100)
-    return cum
-
-
 def _rating_class(rating: str) -> str:
     text = rating.lower()
     if "buy" in text:
@@ -757,8 +745,7 @@ def _build_signal_activity_html(
                 else:
                     segments = []
                     ret_labels = []
-                    cum = _cum_returns(returns)
-                    for i, (ret, cret) in enumerate(zip(returns, cum), start=1):
+                    for i, (ret, cret) in enumerate(returns, start=1):
                         if ret is None:
                             segments.append('<span class="outcome-day placeholder"></span>')
                             ret_labels.append(f"+{i}日 无数据")
@@ -782,8 +769,7 @@ def _build_signal_activity_html(
                     ret_labels.append(f"上周 {prev_d} 无信号/无数据")
                 else:
                     ret_labels.append(f"上周 {prev_d}")
-                    prev_cum = _cum_returns(prev_returns)
-                    for i, (ret, cret) in enumerate(zip(prev_returns, prev_cum), start=1):
+                    for i, (ret, cret) in enumerate(prev_returns, start=1):
                         if ret is None:
                             ret_labels.append(f"  +{i}日 无数据")
                         else:
