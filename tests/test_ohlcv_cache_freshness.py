@@ -111,3 +111,54 @@ def test_load_ohlcv_reuses_fresh_same_day_cache(tmp_path, monkeypatch):
 
     monkeypatch.setattr(su.yf, "download", _fail_download)
     su.load_ohlcv("AAPL", TODAY.strftime("%Y-%m-%d"))
+
+
+@pytest.mark.unit
+def test_load_ohlcv_refetches_when_historical_cache_missing_requested_day(
+    tmp_path, monkeypatch
+):
+    """A cache that stops before the requested historical date must be refreshed.
+
+    This matches the analyze-portfolio scenario: on 2026-09-03 the analysis date
+    is 2026-09-02, but the cache was last refreshed on 2026-09-01 and only
+    contains rows through 2026-09-01. The helper must notice the gap and fetch
+    the missing 2026-09-02 bar instead of silently serving stale data.
+    """
+    _patch_config(tmp_path, monkeypatch)
+    monkeypatch.setattr(su.pd.Timestamp, "today", staticmethod(lambda: TODAY))
+
+    # Cache is fresh but does not reach the requested historical date.
+    _seed("AAPL", tmp_path, monkeypatch, age_seconds=0.0, last_date="2026-07-16")
+
+    calls = []
+
+    def _fake_download(*a, **k):
+        calls.append(1)
+        return pd.DataFrame(
+            {"Date": pd.to_datetime(["2026-07-16", "2026-07-17"]), "Close": [100.0, 222.0]}
+        ).set_index("Date")
+
+    monkeypatch.setattr(su.yf, "download", _fake_download)
+
+    out = su.load_ohlcv("AAPL", "2026-07-17")
+
+    assert calls, "cache missing the requested historical day must trigger a refetch"
+    assert 222.0 in out["Close"].values, "refreshed close for the requested day must reach the caller"
+
+
+@pytest.mark.unit
+def test_load_ohlcv_reuses_cache_for_weekend_without_forcing_refetch(
+    tmp_path, monkeypatch
+):
+    """A cache that stops at Friday should be reused for the following Sunday."""
+    _patch_config(tmp_path, monkeypatch)
+    monkeypatch.setattr(su.pd.Timestamp, "today", staticmethod(lambda: TODAY))
+
+    # 2026-07-19 is a Sunday; the preceding business day is Friday 2026-07-17.
+    _seed("AAPL", tmp_path, monkeypatch, age_seconds=0.0, last_date="2026-07-17")
+
+    def _fail_download(*a, **k):
+        raise AssertionError("Friday-through-Friday cache must not refetch on Sunday")
+
+    monkeypatch.setattr(su.yf, "download", _fail_download)
+    su.load_ohlcv("AAPL", "2026-07-19")

@@ -148,6 +148,26 @@ def _needs_same_day_refresh(last_refresh_ts: float | None, curr_date_dt, today_d
     return time.time() - last_refresh_ts > OHLCV_CACHE_TTL_SECONDS
 
 
+def _cache_covers_requested_date(cached: pd.DataFrame, curr_date_dt) -> bool:
+    """Return True when the cached frame already includes the requested day.
+
+    For a trading day we require an actual row on or after ``curr_date``.
+    For weekends/holidays we accept the preceding business day so that a
+    cache stopping at Friday does not force a refetch on Saturday/Sunday.
+    """
+    if cached is None or cached.empty or "Date" not in cached.columns:
+        return False
+    dates = pd.to_datetime(cached["Date"], errors="coerce").dropna()
+    if dates.empty:
+        return False
+    max_date = dates.max().normalize()
+    curr_date = curr_date_dt.normalize()
+    if max_date >= curr_date:
+        return True
+    prev_bday = pd.offsets.BDay().rollback(curr_date)
+    return max_date >= prev_bday
+
+
 def load_ohlcv(symbol: str, curr_date: str) -> pd.DataFrame:
     """Fetch OHLCV data with caching, filtered to prevent look-ahead bias.
 
@@ -168,10 +188,12 @@ def load_ohlcv(symbol: str, curr_date: str) -> pd.DataFrame:
     today_date = pd.Timestamp.today()
     start_date = today_date - pd.DateOffset(years=5)
     start_str = start_date.strftime("%Y-%m-%d")
-    # yfinance ``end`` is EXCLUSIVE; request tomorrow so today's row is included
-    # when curr_date is the current day (#986). Look-ahead is still prevented by
-    # the curr_date filter below.
-    end_str = (today_date + pd.Timedelta(days=1)).strftime("%Y-%m-%d")
+    # yfinance ``end`` is EXCLUSIVE; request the day after curr_date so rows up
+    # to and including the analysis date are downloaded. When curr_date is today
+    # this is equivalent to tomorrow; for historical dates it avoids pulling
+    # unnecessary future bars. Look-ahead is still prevented by the curr_date
+    # filter below.
+    end_str = (curr_date_dt + pd.Timedelta(days=1)).strftime("%Y-%m-%d")
 
     os.makedirs(config["data_cache_dir"], exist_ok=True)
 
@@ -181,11 +203,12 @@ def load_ohlcv(symbol: str, curr_date: str) -> pd.DataFrame:
     data = None
     if sqlite_cache.has_symbol(safe_symbol):
         last_refresh = sqlite_cache.get_last_refresh(safe_symbol)
-        # Serve the cache only when it is usable and not a stale snapshot of the
-        # day being requested (#1150); otherwise fall through and refetch.
+        # Serve the cache only when it is usable and covers the requested day
+        # (#1150, and historical dates that were missing when the cache was last
+        # written); otherwise fall through and refetch.
         if not _needs_same_day_refresh(last_refresh, curr_date_dt, today_date):
             cached = sqlite_cache.load_ohlcv(safe_symbol, start_date=start_str, end_date=curr_date)
-            if not cached.empty and "Close" in cached.columns:
+            if not cached.empty and "Close" in cached.columns and _cache_covers_requested_date(cached, curr_date_dt):
                 data = cached
 
     if data is None:

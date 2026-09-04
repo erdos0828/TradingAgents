@@ -173,6 +173,58 @@ def _get_price_history(ticker: str, cache_dir: Path, target_date: str, days: int
     return None
 
 
+def _get_signal_outcomes(
+    ticker: str,
+    cache_dir: Path,
+    target_date: str,
+    days: int = 30,
+) -> dict[str, list[float | None]]:
+    """Return close-to-close returns (%) for the 3 trading days after each signal date.
+
+    The returned dict maps a signal date (YYYY-MM-DD) to a list of three return
+    percentages for the next three available trading days.  Missing future days
+    are represented as ``None``.
+    """
+    if not cache_dir or not cache_dir.exists():
+        return {}
+
+    signal_dates = _recent_dates(target_date, days)
+    try:
+        set_config({"data_cache_dir": str(cache_dir)})
+        df = sqlite_cache.load_ohlcv(ticker, start_date=signal_dates[-1])
+    except Exception:
+        return {}
+
+    if df.empty or "Close" not in df.columns or "Date" not in df.columns:
+        return {}
+
+    df["Date"] = pd.to_datetime(df["Date"])
+    date_to_idx = {
+        row.strftime("%Y-%m-%d"): idx
+        for idx, row in enumerate(df["Date"])
+    }
+
+    outcomes: dict[str, list[float | None]] = {}
+    for d in signal_dates:
+        idx = date_to_idx.get(d)
+        if idx is None:
+            continue
+        returns: list[float | None] = []
+        for offset in range(1, 4):
+            nxt = idx + offset
+            if nxt >= len(df):
+                returns.append(None)
+                continue
+            prev_close = float(df.loc[nxt - 1, "Close"])
+            close = float(df.loc[nxt, "Close"])
+            if prev_close:
+                returns.append((close - prev_close) / prev_close * 100)
+            else:
+                returns.append(None)
+        outcomes[d] = returns
+    return outcomes
+
+
 def _load_transactions(transactions_path: Path) -> dict[str, list[dict]]:
     """Load normalized transaction records grouped by ticker."""
     if not transactions_path.exists():
@@ -341,12 +393,21 @@ def _build_lightweight_chart(
 
     candles = []
     for _, row in df.iterrows():
+        date_val = pd.to_datetime(row["Date"], errors="coerce")
+        if pd.isna(date_val):
+            continue
+        o = float(row["Open"])
+        h = float(row["High"])
+        l = float(row["Low"])
+        c = float(row["Close"])
+        if any(math.isnan(v) for v in (o, h, l, c)):
+            continue
         candles.append({
-            "time": str(row["Date"]),
-            "open": round(float(row["Open"]), 4),
-            "high": round(float(row["High"]), 4),
-            "low": round(float(row["Low"]), 4),
-            "close": round(float(row["Close"]), 4),
+            "time": date_val.strftime("%Y-%m-%d"),
+            "open": round(o, 4),
+            "high": round(h, 4),
+            "low": round(l, 4),
+            "close": round(c, 4),
         })
 
     markers = []
@@ -559,14 +620,16 @@ def _build_signal_activity_html(
     tickers: list[str],
     reports_dir: Path,
     target_date: str,
-    days: int = 30,
+    days: int = 15,
     ticker_names: dict[str, str] | None = None,
+    cache_dir: Path | None = None,
 ) -> str:
     """Build a GitHub-style activity map of recent PM ratings.
 
     Each row is a ticker; columns are calendar days (newest -> oldest).
     A colored cell means a signal exists for that day; 'X' or unrecognized
-    ratings are shown as empty (no signal).
+    ratings are shown as empty (no signal).  When price history is available,
+    each signal cell also shows the direction of the next 3 trading days.
     """
     if not tickers:
         return ""
@@ -581,6 +644,10 @@ def _build_signal_activity_html(
         display_name = html.escape(ticker_names.get(ticker, ticker))
         signals = _get_recent_signals(ticker, reports_dir, target_date, days)
         sig_by_date = {s["date"]: s["rating"] for s in signals}
+        outcomes_by_date = (
+            _get_signal_outcomes(ticker, cache_dir, target_date, days)
+            if cache_dir else {}
+        )
         cells: list[str] = []
         for idx, d in enumerate(dates):
             dt = datetime.strptime(d, "%Y-%m-%d")
@@ -592,15 +659,34 @@ def _build_signal_activity_html(
             week_cls = " week-start" if week_start else ""
             rating = sig_by_date.get(d, "X")
             rating_cls = _rating_class(rating)
-            tooltip = f"{display_name} · {d} 无信号"
             if rating == "X" or not rating_cls:
+                tooltip = f"{display_name} · {d} 无信号"
                 cells.append(
-                    f'<div class="activity-cell activity-empty{week_cls}" data-tooltip="{tooltip}"></div>'
+                    f'<div class="activity-cell{week_cls}" data-tooltip="{tooltip}">'
+                    f'<div class="signal-block activity-empty"></div></div>'
                 )
             else:
-                tooltip = f"{display_name} · {d} {html.escape(rating)}"
+                returns = outcomes_by_date.get(d)
+                if returns is None:
+                    segments = ['<span class="outcome-day placeholder"></span>'] * 3
+                    ret_labels = ["+1日 无数据", "+2日 无数据", "+3日 无数据"]
+                else:
+                    segments = []
+                    ret_labels = []
+                    for i, ret in enumerate(returns, start=1):
+                        if ret is None:
+                            segments.append('<span class="outcome-day placeholder"></span>')
+                            ret_labels.append(f"+{i}日 无数据")
+                        else:
+                            segments.append(f'<span class="outcome-day {_pnl_class(ret)}"></span>')
+                            sign = "+" if ret > 0 else ""
+                            ret_labels.append(f"+{i}日 {sign}{ret:.1f}%")
+                outcome_html = f'<div class="outcome-strip">{"".join(segments)}</div>'
+                outcome_tip = " · " + " · ".join(ret_labels)
+                tooltip = f"{display_name} · {d} {html.escape(rating)}{outcome_tip}"
                 cells.append(
-                    f'<div class="activity-cell {rating_cls}{week_cls}" data-tooltip="{tooltip}"></div>'
+                    f'<div class="activity-cell{week_cls}" data-tooltip="{tooltip}">'
+                    f'<div class="signal-block {rating_cls}"></div>{outcome_html}</div>'
                 )
         rows_html.append(
             '<div class="activity-row">'
@@ -633,12 +719,13 @@ def _build_signal_activity_html(
         '<span class="legend-item"><span class="legend-swatch rating-sell"></span>卖出</span>'
         '<span class="legend-item"><span class="legend-swatch rating-underweight"></span>减持</span>'
         '<span class="legend-item"><span class="legend-swatch rating-hold"></span>持有</span>'
+        '<span class="legend-item" style="color:var(--text-muted);">底部色条：信号后3天实际涨跌（红涨 绿跌，×为无数据）</span>'
         '</div>'
     )
 
     return (
         '<div class="activity-map">'
-        '<div class="panel-title">近30天信号</div>'
+        '<div class="panel-title">近15天信号（底部色条为信号后3天实际涨跌）</div>'
         '<div class="activity-header">'
         '<div class="activity-ticker"></div>'
         + "".join(header_cells)
@@ -655,6 +742,7 @@ def _build_region_summary_html(
     target_date: str,
     region_name: str,
     total_portfolio_cost: float = 0.0,
+    cache_dir: Path | None = None,
 ) -> str:
     """Build the executive dashboard summary for a market region."""
     total_market_value = float(region_df["市值"].sum()) if not region_df.empty else 0.0
@@ -683,7 +771,9 @@ def _build_region_summary_html(
 
     tickers = region_df["Ticker"].tolist()
     ticker_names = dict(zip(region_df["Ticker"], region_df["名称"], strict=False)) if "名称" in region_df.columns else {}
-    activity_html = _build_signal_activity_html(tickers, reports_dir, target_date, ticker_names=ticker_names)
+    activity_html = _build_signal_activity_html(
+        tickers, reports_dir, target_date, ticker_names=ticker_names, cache_dir=cache_dir
+    )
 
     return f"""
     <div class="region-dashboard">
@@ -855,7 +945,9 @@ def _build_cards_html(
             f'<button class="market-tab{active_cls}" data-target="{tab_id}" onclick="switchMarketTab(\'{tab_id}\')">{region} ({len(groups[region])})</button>'
         )
         region_df = df[df["Ticker"].apply(_market_region) == region]
-        summary_html = _build_region_summary_html(region_df, reports_dir, target_date, region, total_portfolio_cost)
+        summary_html = _build_region_summary_html(
+            region_df, reports_dir, target_date, region, total_portfolio_cost, cache_dir
+        )
         tab_panels.append(
             f'<div id="{tab_id}" class="market-panel{active_cls}">\n'
             + summary_html
@@ -1168,9 +1260,9 @@ def _base_styles() -> str:
 
         .activity-header, .activity-row {
             display: grid;
-            grid-template-columns: 80px repeat(30, 16px);
-            gap: 3px;
-            align-items: center;
+            grid-template-columns: 100px repeat(15, 28px);
+            gap: 4px;
+            align-items: start;
         }
 
         .activity-header {
@@ -1179,9 +1271,13 @@ def _base_styles() -> str:
             min-height: 30px;
         }
 
+        .activity-row {
+            margin-bottom: 10px;
+        }
+
         .activity-ticker {
             font-family: var(--font-body);
-            font-size: 12px;
+            font-size: 13px;
             font-weight: 500;
             color: var(--text-secondary);
             text-align: left;
@@ -1189,6 +1285,7 @@ def _base_styles() -> str:
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
+            align-self: center;
         }
 
         .activity-day-col {
@@ -1207,7 +1304,7 @@ def _base_styles() -> str:
         .activity-cell.week-start::before {
             content: "";
             position: absolute;
-            left: -2px;
+            left: -3px;
             top: 0;
             bottom: 0;
             width: 1px;
@@ -1216,29 +1313,39 @@ def _base_styles() -> str:
 
         .activity-day-num {
             font-family: var(--font-mono);
-            font-size: 8px;
+            font-size: 10px;
             color: var(--text-secondary);
         }
 
         .activity-day-week {
             font-family: var(--font-mono);
-            font-size: 8px;
+            font-size: 9px;
             color: var(--text-muted);
         }
 
         .activity-cell {
             position: relative;
-            width: 14px;
-            height: 14px;
-            border-radius: 3px;
+            width: 28px;
+            height: 40px;
+            border-radius: 0;
             display: flex;
+            flex-direction: column;
             align-items: center;
-            justify-content: center;
+            justify-content: flex-start;
+            gap: 3px;
+            padding-top: 2px;
             transition: all 0.15s ease;
             cursor: help;
         }
 
-        .activity-cell:hover { transform: scale(1.15); z-index: 10; }
+        .activity-cell .signal-block {
+            width: 24px;
+            height: 24px;
+            border-radius: 4px;
+            position: relative;
+        }
+
+        .activity-cell:hover { transform: scale(1.05); z-index: 10; }
 
         .activity-cell::after {
             content: attr(data-tooltip);
@@ -1251,7 +1358,9 @@ def _base_styles() -> str:
             color: #f6f7f9;
             font-family: var(--font-mono);
             font-size: 10px;
-            white-space: nowrap;
+            white-space: normal;
+            max-width: 220px;
+            text-align: left;
             border-radius: 5px;
             pointer-events: none;
             opacity: 0;
@@ -1261,42 +1370,78 @@ def _base_styles() -> str:
             z-index: 100;
         }
 
+        .activity-cell .outcome-strip {
+            width: 24px;
+            height: 10px;
+            display: flex;
+            gap: 1px;
+            border-radius: 2px;
+            overflow: hidden;
+            background: rgba(0, 0, 0, 0.06);
+        }
+
+        .activity-cell .outcome-day {
+            flex: 1;
+            height: 100%;
+            border-radius: 1px;
+            box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.45);
+        }
+
+        .activity-cell .outcome-day.profit { background: #d93026; }
+        .activity-cell .outcome-day.loss { background: #1e8e3e; }
+        .activity-cell .outcome-day.neutral { background: #c4c7cc; }
+
+        .activity-cell .outcome-day.placeholder {
+            background: transparent;
+            border: 1px solid #9aa0a6;
+            box-shadow: none;
+            display: grid;
+            place-items: center;
+        }
+
+        .activity-cell .outcome-day.placeholder::after {
+            content: "×";
+            font-size: 8px;
+            color: #9aa0a6;
+            line-height: 1;
+        }
+
         .activity-cell:hover::after {
             opacity: 1;
             visibility: visible;
         }
 
-        .activity-empty,
+        .signal-block.activity-empty,
         .legend-swatch.activity-empty {
             background: #e8eaed;
             border: 1px solid rgba(0, 0, 0, 0.04);
         }
 
-        .activity-cell.rating-buy,
+        .signal-block.rating-buy,
         .legend-swatch.rating-buy {
             background: rgba(217, 48, 38, 0.9);
             border: 1px solid rgba(217, 48, 38, 0.25);
         }
 
-        .activity-cell.rating-overweight,
+        .signal-block.rating-overweight,
         .legend-swatch.rating-overweight {
             background: rgba(239, 68, 68, 0.75);
             border: 1px solid rgba(239, 68, 68, 0.25);
         }
 
-        .activity-cell.rating-sell,
+        .signal-block.rating-sell,
         .legend-swatch.rating-sell {
             background: rgba(30, 142, 62, 0.9);
             border: 1px solid rgba(30, 142, 62, 0.25);
         }
 
-        .activity-cell.rating-underweight,
+        .signal-block.rating-underweight,
         .legend-swatch.rating-underweight {
             background: rgba(74, 222, 128, 0.8);
             border: 1px solid rgba(74, 222, 128, 0.25);
         }
 
-        .activity-cell.rating-hold,
+        .signal-block.rating-hold,
         .legend-swatch.rating-hold {
             background: rgba(245, 158, 11, 0.9);
             border: 1px solid rgba(245, 158, 11, 0.25);
@@ -1613,7 +1758,7 @@ def _base_styles() -> str:
             background: var(--bg-card);
             border: 1px solid var(--border);
             border-radius: var(--radius-sm);
-            overflow: hidden;
+            overflow: visible;
         }
 
         .trade-tooltip {
