@@ -24,6 +24,7 @@ from tradingagents.agents.utils.agent_utils import (
     get_news,
     get_prediction_markets,
     get_stock_data,
+    get_tradingview_ta,
     get_verified_market_snapshot,
     resolve_instrument_identity,
 )
@@ -201,6 +202,8 @@ class TradingAgentsGraph:
                     get_stock_data,
                     # Technical indicators
                     get_indicators,
+                    # TradingView aggregated technical analysis consensus
+                    get_tradingview_ta,
                     # Deterministic verification snapshot (bound to the analyst
                     # LLM and required by its prompt; must be executable here or
                     # the call fails and the model reports it "unavailable").
