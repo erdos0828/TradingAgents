@@ -711,9 +711,8 @@ def _build_signal_activity_html(
     date_labels = [d[8:] for d in dates]  # show day only
 
     rows_html: list[str] = []
-    for row_idx, ticker in enumerate(tickers):
+    for ticker in tickers:
         display_name = html.escape(ticker_names.get(ticker, ticker))
-        row_cls = " activity-row-first" if row_idx == 0 else ""
         signals = _get_recent_signals(ticker, reports_dir, target_date, days)
         sig_by_date = {s["date"]: s["rating"] for s in signals}
         outcomes_by_date = (
@@ -788,7 +787,7 @@ def _build_signal_activity_html(
                     f'<div class="signal-block {rating_cls}"></div>{outcome_html}</div>'
                 )
         rows_html.append(
-            f'<div class="activity-row{row_cls}">'
+            '<div class="activity-row">'
             f'<div class="activity-ticker" title="{html.escape(ticker)}">{display_name}</div>'
             + "".join(cells)
             + "</div>"
@@ -1446,36 +1445,31 @@ def _base_styles() -> str:
 
         .activity-cell:hover { transform: scale(1.05); z-index: 10; }
 
-        .activity-cell::after {
-            content: attr(data-tooltip);
-            position: absolute;
-            bottom: 100%;
-            left: 50%;
-            transform: translateX(-50%) translateY(-4px);
-            padding: 6px 10px;
+        .activity-global-tooltip {
+            position: fixed;
+            z-index: 9999;
+            padding: 8px 12px;
             background: rgba(31, 35, 40, 0.95);
             color: #f6f7f9;
             font-family: var(--font-mono);
-            font-size: 11px;
-            line-height: 1.5;
+            font-size: 12px;
+            line-height: 1.6;
             white-space: pre-line;
             width: max-content;
             min-width: 80px;
             max-width: 280px;
             text-align: left;
-            border-radius: 5px;
+            border-radius: 6px;
             pointer-events: none;
             opacity: 0;
             visibility: hidden;
             transition: opacity 0.15s ease, visibility 0.15s ease;
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-            z-index: 100;
         }
 
-        .activity-row.activity-row-first .activity-cell::after {
-            bottom: auto;
-            top: 100%;
-            transform: translateX(-50%) translateY(12px);
+        .activity-global-tooltip.visible {
+            opacity: 1;
+            visibility: visible;
         }
 
         .activity-cell .outcome-strip {
@@ -1514,9 +1508,9 @@ def _base_styles() -> str:
             line-height: 1;
         }
 
-        .activity-cell:hover::after {
-            opacity: 1;
-            visibility: visible;
+        .activity-cell:hover {
+            transform: scale(1.05);
+            z-index: 10;
         }
 
         .signal-block.activity-empty,
@@ -1976,7 +1970,7 @@ def _base_styles() -> str:
             .activity-cell { width: 10px; height: 10px; }
             .activity-day-col.week-start::before,
             .activity-cell.week-start::before { left: -1px; }
-            .activity-cell::after { font-size: 9px; padding: 4px 6px; }
+            .activity-global-tooltip { font-size: 9px; padding: 4px 6px; }
             .activity-day-num { font-size: 6px; }
             .activity-day-week { font-size: 6px; }
             .container { padding: 20px 18px 32px; }
@@ -2030,6 +2024,7 @@ def _build_html(
         '        <div class="tooltip-body"></div>\n'
         '        <div class="tooltip-summary"></div>\n'
         '    </div>\n'
+        '    <div id="activity-tooltip" class="activity-global-tooltip"></div>\n'
         '    <script>\n'
         '        (function() {\n'
         '            const cards = document.querySelectorAll(\'.holding-card, .region-dashboard\');\n'
@@ -2042,6 +2037,34 @@ def _build_html(
         '                    card.style.transform = \'translateY(0)\';\n'
         '                }, 60 * i);\n'
         '            });\n'
+        '            const activityTooltip = document.getElementById(\'activity-tooltip\');\n'
+        '            if (activityTooltip) {\n'
+        '                function positionTooltip(e) {\n'
+        '                    const margin = 12;\n'
+        '                    let left = e.clientX + margin;\n'
+        '                    let top = e.clientY + margin;\n'
+        '                    const rect = activityTooltip.getBoundingClientRect();\n'
+        '                    if (left + rect.width > window.innerWidth) {\n'
+        '                        left = e.clientX - rect.width - margin;\n'
+        '                    }\n'
+        '                    if (top + rect.height > window.innerHeight) {\n'
+        '                        top = e.clientY - rect.height - margin;\n'
+        '                    }\n'
+        '                    activityTooltip.style.left = left + \'px\';\n'
+        '                    activityTooltip.style.top = top + \'px\';\n'
+        '                }\n'
+        '                document.querySelectorAll(\'.activity-cell\').forEach(cell => {\n'
+        '                    cell.addEventListener(\'mouseenter\', function(e) {\n'
+        '                        activityTooltip.textContent = cell.getAttribute(\'data-tooltip\');\n'
+        '                        activityTooltip.classList.add(\'visible\');\n'
+        '                        positionTooltip(e);\n'
+        '                    });\n'
+        '                    cell.addEventListener(\'mousemove\', positionTooltip);\n'
+        '                    cell.addEventListener(\'mouseleave\', function() {\n'
+        '                        activityTooltip.classList.remove(\'visible\');\n'
+        '                    });\n'
+        '                });\n'
+        '            }\n'
         '        })();\n'
         '    </script>\n'
         '</body>\n'
