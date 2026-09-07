@@ -189,12 +189,13 @@ def _get_signal_outcomes(
 ) -> dict[str, list[tuple[float | None, float | None]]]:
     """Return close-to-close returns (%) after each signal date.
 
-    The returned dict maps a signal date (YYYY-MM-DD) to a list of six
+    The returned dict maps a signal date (YYYY-MM-DD) to a list of five
     ``(daily_return, cumulative_return)`` tuples for trading-day offsets
-    ``[1, 2, 3, 7, 8, 9]``.  The daily return is the close-to-close move for
-    that trading day; the cumulative return is the total move from the
-    signal-day close to that day's close (``close_i / close_0 - 1``).
-    Missing future days are represented as ``None``.
+    ``[1, 2, 3, 7]`` plus a final tuple for the latest available trading
+    day.  The daily return is the close-to-close move for that trading day;
+    the cumulative return is the total move from the signal-day close to that
+    day's close (``close_i / close_0 - 1``).  Missing future days are
+    represented as ``None``.
     """
     if not cache_dir or not cache_dir.exists():
         return {}
@@ -215,8 +216,12 @@ def _get_signal_outcomes(
         for idx, row in enumerate(df["Date"])
     }
 
+    last_idx = len(df) - 1
+    last_close = float(df.loc[last_idx, "Close"])
+    prev_last_close = float(df.loc[last_idx - 1, "Close"]) if last_idx > 0 else None
+
     outcomes: dict[str, list[tuple[float | None, float | None]]] = {}
-    offsets = [1, 2, 3, 7, 8, 9]
+    offsets = [1, 2, 3, 7]
     for d in signal_dates:
         idx = date_to_idx.get(d)
         if idx is None:
@@ -236,6 +241,17 @@ def _get_signal_outcomes(
                 results.append((daily, cumulative))
             else:
                 results.append((None, None))
+
+        # Latest available trading day relative to the signal date.
+        if idx >= last_idx or prev_last_close is None:
+            results.append((None, None))
+        elif start_close and prev_last_close:
+            latest_daily = (last_close - prev_last_close) / prev_last_close * 100
+            latest_cumulative = (last_close - start_close) / start_close * 100
+            results.append((latest_daily, latest_cumulative))
+        else:
+            results.append((None, None))
+
         outcomes[d] = results
     return outcomes
 
@@ -740,12 +756,12 @@ def _build_signal_activity_html(
                 returns = outcomes_by_date.get(d)
                 if returns is None:
                     segments = ['<span class="outcome-day placeholder"></span>'] * 3
-                    ret_labels = ["+1日 无数据", "+2日 无数据", "+3日 无数据"]
-                    future_labels: list[str] = []
+                    ret_labels = ["+1日 无数据", "+2日 无数据", "+3日 无数据", "+7日 无数据", "至今 无数据"]
                 else:
-                    # returns is [+1, +2, +3, +7, +8, +9] with (daily, cumulative).
+                    # returns is [+1, +2, +3, +7, latest] with (daily, cumulative).
                     near = returns[:3]
-                    future = returns[3:]
+                    future = returns[3] if len(returns) > 3 else (None, None)
+                    latest = returns[4] if len(returns) > 4 else (None, None)
                     segments = []
                     ret_labels = []
                     for i, (ret, cret) in enumerate(near, start=1):
@@ -763,24 +779,20 @@ def _build_signal_activity_html(
                                     f"+{i}日 {sign}{ret:.1f}%  累计 {csign}{cret:.1f}%"
                                 )
 
-                    future_labels = []
-                    future_labels.append("")
-                    future_labels.append("+7")
-                    for offset, (ret, cret) in zip([7, 8, 9], future):
+                    for label, (ret, cret) in [("+7日", future), ("至今", latest)]:
                         if ret is None:
-                            future_labels.append(f"  +{offset}日 无数据")
+                            ret_labels.append(f"{label} 无数据")
                         else:
                             sign = "+" if ret > 0 else ""
                             if cret is None:
-                                future_labels.append(f"  +{offset}日 {sign}{ret:.1f}%  累计 无数据")
+                                ret_labels.append(f"{label} {sign}{ret:.1f}%  累计 无数据")
                             else:
                                 csign = "+" if cret > 0 else ""
-                                future_labels.append(
-                                    f"  +{offset}日 {sign}{ret:.1f}%  累计 {csign}{cret:.1f}%"
+                                ret_labels.append(
+                                    f"{label} {sign}{ret:.1f}%  累计 {csign}{cret:.1f}%"
                                 )
 
                 outcome_html = f'<div class="outcome-strip">{"".join(segments)}</div>'
-                ret_labels.extend(future_labels)
                 tooltip = f"{display_name}&#10;{d} {html.escape(rating)}&#10;" + "&#10;".join(ret_labels)
                 cells.append(
                     f'<div class="activity-cell{week_cls}" data-tooltip="{tooltip}">'
