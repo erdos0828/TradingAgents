@@ -29,14 +29,27 @@ def _detect_market(ticker: str) -> str:
     return "us"
 
 
+def _last_trading_day(ref_date: datetime, market: str = "all") -> str:
+    """Return the most recent trading day strictly before ref_date.
+
+    Weekends are treated as non-trading days for both a-share and us.
+    Market-specific holidays are not yet handled.
+    """
+    del market  # reserved for future market-specific holiday calendars
+    d = ref_date - timedelta(days=1)
+    while d.weekday() >= 5:  # Saturday=5, Sunday=6
+        d -= timedelta(days=1)
+    return d.strftime("%Y-%m-%d")
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Batch analyze all stocks in portfolio holdings"
     )
     parser.add_argument(
         "--date",
-        default=(datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d"),
-        help="Analysis date in YYYY-MM-DD format (default: yesterday)",
+        default=None,
+        help="Analysis date in YYYY-MM-DD format (default: last trading day)",
     )
     parser.add_argument(
         "--analysts",
@@ -71,6 +84,9 @@ def main():
     )
 
     args = parser.parse_args()
+
+    if args.date is None:
+        args.date = _last_trading_day(datetime.now(), market=args.market)
 
     # Load holdings
     holdings_path = Path(args.holdings)

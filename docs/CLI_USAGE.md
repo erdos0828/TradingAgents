@@ -166,7 +166,7 @@ tradingagents serve --holdings data/my_holdings.json
 
 | 参数 | 简写 | 说明 | 默认值 |
 |------|------|------|--------|
-| `--date` | `-d` | 分析日期 `YYYY-MM-DD` | 今天 |
+| `--date` | `-d` | 分析日期 `YYYY-MM-DD` | 最近一个交易日 |
 | `--analysts` | `-a` | 分析师组合 | `market,news,fundamentals` |
 | `--no-dingtalk` | | 禁用钉钉通知 | `False` |
 | `--dry-run` | | 只打印将要执行的命令 | `False` |

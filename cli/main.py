@@ -1811,7 +1811,7 @@ def serve_status(
 @app.command(name="analyze-portfolio")
 def analyze_portfolio(
     date: str | None = typer.Option(
-        None, "--date", "-d", help="Analysis date in YYYY-MM-DD format (default: yesterday)"
+        None, "--date", "-d", help="Analysis date in YYYY-MM-DD format (default: last trading day)"
     ),
     analysts: str = typer.Option(
         "market,news,fundamentals", "--analysts", "-a", help="Comma-separated analysts"
