@@ -30,6 +30,7 @@ from send_portfolio_summary import (
     _load_transactions,
     build_summary_data,
 )
+from tradingagents.dataflows import tradingview_ta_cache
 
 load_dotenv()
 
@@ -197,6 +198,35 @@ def api_report_file(ticker, date_time, file_path):
         content = target.read_text(encoding="utf-8")
         return content, 200, {"Content-Type": "text/markdown; charset=utf-8"}
     return "Not found", 404
+
+
+def _load_ta_for_report(ticker: str, date: str) -> dict | None:
+    """Load TradingView TA from cache for ``date``, falling back to latest cached date."""
+    data = tradingview_ta_cache.load_ta(ticker, date)
+    if data is not None:
+        return {"date": date, "fallback": False, "data": data}
+
+    try:
+        rows = tradingview_ta_cache._get_connection().execute(
+            "SELECT date FROM tradingview_ta WHERE symbol = ? ORDER BY date DESC LIMIT 1",
+            (tradingview_ta_cache._normalize_symbol(ticker),),
+        ).fetchall()
+        if rows:
+            fallback_date = rows[0]["date"]
+            data = tradingview_ta_cache.load_ta(ticker, fallback_date)
+            if data is not None:
+                return {"date": fallback_date, "fallback": True, "data": data}
+    except Exception:
+        pass
+    return None
+
+
+@app.route("/api/ta/<ticker>/<date>")
+def api_ta(ticker, date):
+    result = _load_ta_for_report(ticker, date)
+    if result is None:
+        return jsonify({"error": "No TradingView TA data found"}), 404
+    return jsonify(result)
 
 
 @app.route("/", methods=["GET"])

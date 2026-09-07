@@ -239,6 +239,237 @@ INDEX_HTML = """<!DOCTYPE html>
             text-align: center;
             padding: 40px;
         }
+
+        /* Technical indicators tab (TradingView style) */
+        .ta-container {
+            max-width: 1100px;
+            margin: 0 auto;
+        }
+        .ta-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+            padding-bottom: 16px;
+            border-bottom: 1px solid var(--border);
+        }
+        .ta-header h2 {
+            margin: 0;
+            font-size: 20px;
+        }
+        .ta-header .ta-date {
+            font-size: 13px;
+            color: var(--muted);
+        }
+        .ta-summary-row {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
+            margin-bottom: 32px;
+        }
+        .ta-summary-card {
+            background: var(--panel);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+        }
+        .ta-summary-card .card-title {
+            font-size: 14px;
+            color: var(--muted);
+            margin-bottom: 12px;
+        }
+        .ta-gauge {
+            width: 140px;
+            height: 70px;
+            margin: 0 auto 12px;
+            position: relative;
+            overflow: hidden;
+        }
+        .ta-gauge::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 140px;
+            height: 140px;
+            border-radius: 50%;
+            background: conic-gradient(
+                from 180deg,
+                #ef4444 0deg 36deg,
+                #f87171 36deg 72deg,
+                #94a3b8 72deg 108deg,
+                #60a5fa 108deg 144deg,
+                #3b82f6 144deg 180deg
+            );
+            mask: radial-gradient(circle at 50% 100%, transparent 55px, black 56px);
+            -webkit-mask: radial-gradient(circle at 50% 100%, transparent 55px, black 56px);
+        }
+        .ta-gauge-needle {
+            position: absolute;
+            bottom: 0;
+            left: 50%;
+            width: 2px;
+            height: 60px;
+            background: #1f2937;
+            transform-origin: bottom center;
+            transform: translateX(-50%) rotate(-90deg);
+            border-radius: 2px;
+            z-index: 2;
+        }
+        .ta-gauge-center {
+            position: absolute;
+            bottom: -6px;
+            left: 50%;
+            width: 12px;
+            height: 12px;
+            background: #1f2937;
+            border-radius: 50%;
+            transform: translateX(-50%);
+            z-index: 3;
+        }
+        .ta-gauge-labels {
+            display: flex;
+            justify-content: space-between;
+            font-size: 10px;
+            color: var(--muted);
+            margin-top: 4px;
+            padding: 0 8px;
+        }
+        .ta-verdict {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 12px;
+        }
+        .ta-verdict.strong-sell { color: #ef4444; }
+        .ta-verdict.sell { color: #f87171; }
+        .ta-verdict.neutral { color: #94a3b8; }
+        .ta-verdict.buy { color: #60a5fa; }
+        .ta-verdict.strong-buy { color: #3b82f6; }
+        .ta-votes {
+            display: flex;
+            justify-content: center;
+            gap: 16px;
+            font-size: 13px;
+        }
+        .ta-votes span {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .ta-votes .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+        }
+        .ta-votes .sell { background: #f87171; }
+        .ta-votes .neutral { background: #94a3b8; }
+        .ta-votes .buy { background: #60a5fa; }
+        .ta-section {
+            background: var(--panel);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            margin-bottom: 20px;
+            overflow: hidden;
+        }
+        .ta-section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px 20px;
+            cursor: pointer;
+            font-weight: 500;
+            border-bottom: 1px solid transparent;
+        }
+        .ta-section-header:hover {
+            background: var(--panel-hover);
+        }
+        .ta-section.open .ta-section-header {
+            border-bottom-color: var(--border);
+        }
+        .ta-section-body {
+            display: none;
+            padding: 16px 20px;
+        }
+        .ta-section.open .ta-section-body {
+            display: block;
+        }
+        .ta-section-toggle {
+            color: var(--muted);
+            font-size: 12px;
+        }
+        .ta-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+        .ta-table th, .ta-table td {
+            padding: 10px 12px;
+            text-align: left;
+            border-bottom: 1px solid var(--border);
+        }
+        .ta-table th {
+            color: var(--muted);
+            font-weight: 500;
+        }
+        .ta-table td:last-child, .ta-table th:last-child {
+            text-align: right;
+        }
+        .ta-signal {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+        .ta-signal.strong-sell { background: rgba(239, 68, 68, 0.15); color: #ef4444; }
+        .ta-signal.sell { background: rgba(248, 113, 113, 0.15); color: #f87171; }
+        .ta-signal.neutral { background: rgba(148, 163, 184, 0.15); color: #94a3b8; }
+        .ta-signal.buy { background: rgba(96, 165, 250, 0.15); color: #60a5fa; }
+        .ta-signal.strong-buy { background: rgba(59, 130, 246, 0.15); color: #3b82f6; }
+        .ta-pivot-grid {
+            display: grid;
+            grid-template-columns: 80px repeat(5, 1fr);
+            gap: 1px;
+            background: var(--border);
+            border-radius: 8px;
+            overflow: hidden;
+            font-size: 13px;
+        }
+        .ta-pivot-grid > div {
+            background: var(--panel);
+            padding: 10px 8px;
+            text-align: center;
+        }
+        .ta-pivot-grid > div.header {
+            background: var(--bg);
+            color: var(--muted);
+            font-weight: 500;
+        }
+        .ta-pivot-grid > div.row-label {
+            background: var(--bg);
+            color: var(--muted);
+            font-weight: 500;
+        }
+        .ta-empty {
+            color: var(--muted);
+            text-align: center;
+            padding: 60px 20px;
+        }
+        .ta-error {
+            color: #f87171;
+            text-align: center;
+            padding: 40px 20px;
+        }
+        @media (max-width: 768px) {
+            .ta-summary-row {
+                grid-template-columns: 1fr;
+            }
+            .ta-pivot-grid {
+                grid-template-columns: 60px repeat(5, 1fr);
+                font-size: 11px;
+            }
+        }
     </style>
 </head>
 <body>
@@ -431,6 +662,18 @@ INDEX_HTML = """<!DOCTYPE html>
                 });
                 tabs.appendChild(btn);
             });
+
+            // Technical indicators tab (data from SQLite cache)
+            const taBtn = document.createElement('button');
+            taBtn.className = 'tab';
+            taBtn.textContent = '技术指标';
+            taBtn.dataset.ta = 'true';
+            taBtn.addEventListener('click', () => {
+                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                taBtn.classList.add('active');
+                loadTechnicalIndicators();
+            });
+            tabs.appendChild(taBtn);
         }
 
         async function loadFile(path) {
@@ -443,6 +686,245 @@ INDEX_HTML = """<!DOCTYPE html>
             } catch (e) {
                 $('content').innerHTML = `<div class="empty">加载失败: ${e.message}</div>`;
             }
+        }
+
+        async function loadTechnicalIndicators() {
+            $('content').innerHTML = '<div class="loading">加载技术指标...</div>';
+            $('reportMeta').textContent = 'TradingView 技术指标';
+
+            const reportDate = currentDate.slice(0, 10);
+            try {
+                const res = await fetch(`/api/ta/${currentTicker}/${reportDate}`);
+                if (!res.ok) {
+                    const err = await res.json().catch(() => ({}));
+                    $('content').innerHTML = `<div class="ta-error">暂无技术指标数据：${err.error || res.statusText}</div>`;
+                    return;
+                }
+                const payload = await res.json();
+                $('content').innerHTML = renderTechnicalIndicators(payload);
+                attachTASectionToggles();
+            } catch (e) {
+                $('content').innerHTML = `<div class="ta-error">加载失败: ${e.message}</div>`;
+            }
+        }
+
+        function taClassFromSignal(signal) {
+            const s = (signal || '').toUpperCase();
+            if (s === 'STRONG_BUY') return 'strong-buy';
+            if (s === 'BUY') return 'buy';
+            if (s === 'STRONG_SELL') return 'strong-sell';
+            if (s === 'SELL') return 'sell';
+            return 'neutral';
+        }
+
+        function taClassFromRec(rec) {
+            const r = (rec || '').toUpperCase();
+            if (r === 'STRONG_BUY') return 'strong-buy';
+            if (r === 'BUY') return 'buy';
+            if (r === 'STRONG_SELL') return 'strong-sell';
+            if (r === 'SELL') return 'sell';
+            return 'neutral';
+        }
+
+        function taLabelFromRec(rec) {
+            const map = {
+                'STRONG_BUY': '强烈买入',
+                'BUY': '买入',
+                'NEUTRAL': '中立',
+                'SELL': '卖出',
+                'STRONG_SELL': '强烈卖出'
+            };
+            return map[(rec || '').toUpperCase()] || rec || '中立';
+        }
+
+        function taGaugeAngle(rec) {
+            const r = (rec || '').toUpperCase();
+            const angles = {
+                'STRONG_SELL': -72,
+                'SELL': -36,
+                'NEUTRAL': 0,
+                'BUY': 36,
+                'STRONG_BUY': 72
+            };
+            return angles[r] || 0;
+        }
+
+        function taGaugeCard(title, rec, buy, sell, neutral) {
+            const cls = taClassFromRec(rec);
+            const angle = taGaugeAngle(rec);
+            return `
+                <div class="ta-summary-card">
+                    <div class="card-title">${title}</div>
+                    <div class="ta-gauge">
+                        <div class="ta-gauge-needle" style="transform: translateX(-50%) rotate(${angle}deg)"></div>
+                        <div class="ta-gauge-center"></div>
+                    </div>
+                    <div class="ta-gauge-labels">
+                        <span>强卖</span>
+                        <span>卖</span>
+                        <span>中</span>
+                        <span>买</span>
+                        <span>强买</span>
+                    </div>
+                    <div class="ta-verdict ${cls}">${taLabelFromRec(rec)}</div>
+                    <div class="ta-votes">
+                        <span><span class="dot sell"></span>卖出 ${sell}</span>
+                        <span><span class="dot neutral"></span>中立 ${neutral}</span>
+                        <span><span class="dot buy"></span>买入 ${buy}</span>
+                    </div>
+                </div>
+            `;
+        }
+
+        function taSignalBadge(signal) {
+            const cls = taClassFromSignal(signal);
+            const labels = {
+                'strong-buy': '强烈买入',
+                'buy': '买入',
+                'neutral': '中立',
+                'sell': '卖出',
+                'strong-sell': '强烈卖出'
+            };
+            return `<span class="ta-signal ${cls}">${labels[cls] || signal || '中立'}</span>`;
+        }
+
+        function taIndicatorTable(items) {
+            if (!items || items.length === 0) return '<div class="ta-empty">无数据</div>';
+            const rows = items.map(([name, value, signal]) => `
+                <tr>
+                    <td>${name}</td>
+                    <td>${value !== null && value !== undefined ? value : '—'}</td>
+                    <td>${taSignalBadge(signal)}</td>
+                </tr>
+            `).join('');
+            return `<table class="ta-table"><thead><tr><th>名称</th><th>值</th><th>操作</th></tr></thead><tbody>${rows}</tbody></table>`;
+        }
+
+        function taPivotTable(indicators) {
+            const types = ['Classic', 'Fibonacci', 'Camarilla', 'Woodie', 'Demark'];
+            const labels = ['S3', 'S2', 'S1', 'Middle', 'R1', 'R2', 'R3'];
+            const displayLabels = ['S3', 'S2', 'S1', 'P', 'R1', 'R2', 'R3'];
+            const typeNames = { 'Classic': '经典', 'Fibonacci': '斐波那契', 'Camarilla': '卡玛利亚', 'Woodie': '伍迪', 'Demark': 'DM' };
+
+            let html = '<div class="ta-pivot-grid">';
+            html += '<div class="header">枢轴点</div>';
+            types.forEach(t => html += `<div class="header">${typeNames[t] || t}</div>`);
+
+            labels.forEach((label, idx) => {
+                html += `<div class="row-label">${displayLabels[idx]}</div>`;
+                types.forEach(type => {
+                    let key;
+                    if (type === 'Demark') {
+                        if (label === 'Middle') key = `Pivot.M.Demark.Middle`;
+                        else if (label === 'S1') key = `Pivot.M.Demark.S1`;
+                        else if (label === 'R1') key = `Pivot.M.Demark.R1`;
+                        else key = null;
+                    } else {
+                        key = `Pivot.M.${type}.${label}`;
+                    }
+                    const val = key && indicators ? indicators[key] : null;
+                    html += `<div>${val !== null && val !== undefined ? Number(val).toFixed(2) : '—'}</div>`;
+                });
+            });
+            html += '</div>';
+            return html;
+        }
+
+        function renderTechnicalIndicators(payload) {
+            const data = payload.data || {};
+            const indicators = data.indicators || {};
+            const oscillators = data.oscillators || {};
+            const movingAverages = data.moving_averages || {};
+            const dateText = payload.fallback
+                ? `报告日期 ${currentDate.slice(0, 10)} 无缓存，显示最近可用日期 ${payload.date}`
+                : `数据日期 ${payload.date}`;
+
+            function countSignals(map) {
+                let buy = 0, sell = 0, neutral = 0;
+                Object.values(map).forEach(s => {
+                    const u = (s || '').toUpperCase();
+                    if (u === 'BUY' || u === 'STRONG_BUY') buy++;
+                    else if (u === 'SELL' || u === 'STRONG_SELL') sell++;
+                    else neutral++;
+                });
+                return { buy, sell, neutral };
+            }
+
+            function recFromCounts({ buy, sell, neutral }) {
+                if (sell > buy && sell > neutral) return 'SELL';
+                if (buy > sell && buy > neutral) return 'BUY';
+                return 'NEUTRAL';
+            }
+
+            const oscCounts = countSignals(oscillators);
+            const maCounts = countSignals(movingAverages);
+
+            const oscItems = Object.entries(oscillators).map(([name, signal]) => {
+                const keyMap = {
+                    'RSI': 'RSI', 'STOCH.K': 'Stoch.K', 'CCI': 'CCI20', 'ADX': 'ADX',
+                    'AO': 'AO', 'Mom': 'Mom', 'MACD': 'MACD.macd', 'Stoch.RSI': 'Stoch.RSI.K',
+                    'W%R': 'W.R', 'BBP': 'BBPower', 'UO': 'UO'
+                };
+                const value = indicators[keyMap[name] || name];
+                return [name, value !== undefined ? Number(value).toFixed(2) : null, signal];
+            });
+
+            const maItems = Object.entries(movingAverages).map(([name, signal]) => {
+                const value = indicators[name];
+                return [name, value !== undefined ? Number(value).toFixed(2) : null, signal];
+            });
+
+            return `
+                <div class="ta-container">
+                    <div class="ta-header">
+                        <h2>${currentTicker} 技术指标</h2>
+                        <span class="ta-date">${dateText}</span>
+                    </div>
+                    <div class="ta-summary-row">
+                        ${taGaugeCard('震荡指标', recFromCounts(oscCounts), oscCounts.buy, oscCounts.sell, oscCounts.neutral)}
+                        ${taGaugeCard('总结', data.recommendation, data.buy_votes || 0, data.sell_votes || 0, data.neutral_votes || 0)}
+                        ${taGaugeCard('移动平均线', recFromCounts(maCounts), maCounts.buy, maCounts.sell, maCounts.neutral)}
+                    </div>
+                    <div class="ta-section open">
+                        <div class="ta-section-header">
+                            <span>震荡指标</span>
+                            <span class="ta-section-toggle">收起</span>
+                        </div>
+                        <div class="ta-section-body">
+                            ${taIndicatorTable(oscItems)}
+                        </div>
+                    </div>
+                    <div class="ta-section open">
+                        <div class="ta-section-header">
+                            <span>移动平均线</span>
+                            <span class="ta-section-toggle">收起</span>
+                        </div>
+                        <div class="ta-section-body">
+                            ${taIndicatorTable(maItems)}
+                        </div>
+                    </div>
+                    <div class="ta-section open">
+                        <div class="ta-section-header">
+                            <span>枢轴点</span>
+                            <span class="ta-section-toggle">收起</span>
+                        </div>
+                        <div class="ta-section-body">
+                            ${taPivotTable(indicators)}
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function attachTASectionToggles() {
+            document.querySelectorAll('.ta-section-header').forEach(header => {
+                header.addEventListener('click', () => {
+                    const section = header.closest('.ta-section');
+                    section.classList.toggle('open');
+                    const toggle = header.querySelector('.ta-section-toggle');
+                    if (toggle) toggle.textContent = section.classList.contains('open') ? '收起' : '展开';
+                });
+            });
         }
 
         function clearReport() {
