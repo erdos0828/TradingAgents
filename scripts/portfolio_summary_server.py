@@ -115,6 +115,7 @@ _PAGE_TEMPLATE = """<!DOCTYPE html>
         <div class="tooltip-body"></div>
         <div class="tooltip-summary"></div>
     </div>
+    <div id="activity-tooltip" class="activity-global-tooltip"></div>
     <script>
         (function() {
             const cards = document.querySelectorAll('.holding-card, .region-dashboard');
@@ -126,6 +127,41 @@ _PAGE_TEMPLATE = """<!DOCTYPE html>
                     card.style.opacity = '1';
                     card.style.transform = 'translateY(0)';
                 }, 60 * i);
+            });
+            document.addEventListener('DOMContentLoaded', function() {
+                const activityTooltip = document.getElementById('activity-tooltip');
+                if (!activityTooltip) return;
+                function positionTooltip(e) {
+                    const margin = 12;
+                    let left = e.clientX + margin;
+                    let top = e.clientY + margin;
+                    const rect = activityTooltip.getBoundingClientRect();
+                    if (left + rect.width > window.innerWidth) {
+                        left = e.clientX - rect.width - margin;
+                    }
+                    if (top + rect.height > window.innerHeight) {
+                        top = e.clientY - rect.height - margin;
+                    }
+                    activityTooltip.style.left = left + 'px';
+                    activityTooltip.style.top = top + 'px';
+                }
+                document.body.addEventListener('mouseover', function(e) {
+                    const cell = e.target.closest('.activity-cell');
+                    if (!cell) return;
+                    activityTooltip.textContent = cell.getAttribute('data-tooltip');
+                    activityTooltip.classList.add('visible');
+                    positionTooltip(e);
+                });
+                document.body.addEventListener('mousemove', function(e) {
+                    const cell = e.target.closest('.activity-cell');
+                    if (!cell) return;
+                    positionTooltip(e);
+                });
+                document.body.addEventListener('mouseout', function(e) {
+                    const cell = e.target.closest('.activity-cell');
+                    if (!cell) return;
+                    activityTooltip.classList.remove('visible');
+                });
             });
         })();
     </script>
