@@ -43,21 +43,41 @@
   }
 
   function signalColor(sig) {
-    if (sig === 'BUY') return 'signal-buy';
-    if (sig === 'SELL') return 'signal-sell';
-    if (sig === 'HOLD') return 'signal-hold';
+    if (sig === 'BUY' || sig === 'Buy') return 'signal-buy';
+    if (sig === 'SELL' || sig === 'Sell') return 'signal-sell';
+    if (sig === 'HOLD' || sig === 'Hold') return 'signal-hold';
+    if (sig === 'OVERWEIGHT' || sig === 'Overweight') return 'signal-overweight';
+    if (sig === 'UNDERWEIGHT' || sig === 'Underweight') return 'signal-underweight';
     return 'signal-none';
   }
 
   function signalLabel(sig) {
-    return { BUY: '买入', SELL: '卖出', HOLD: '持有' }[sig] || '—';
+    return {
+      BUY: '买入', Buy: '买入',
+      SELL: '卖出', Sell: '卖出',
+      HOLD: '持有', Hold: '持有',
+      OVERWEIGHT: '增持', Overweight: '增持',
+      UNDERWEIGHT: '减持', Underweight: '减持',
+    }[sig] || '—';
   }
 
   function signalBg(sig) {
-    if (sig === 'BUY') return 'var(--red)';
-    if (sig === 'SELL') return 'var(--green)';
-    if (sig === 'HOLD') return 'var(--orange)';
+    if (sig === 'BUY' || sig === 'Buy') return 'var(--red)';
+    if (sig === 'SELL' || sig === 'Sell') return 'var(--green)';
+    if (sig === 'HOLD' || sig === 'Hold') return 'var(--orange)';
+    if (sig === 'OVERWEIGHT' || sig === 'Overweight') return 'var(--red)';
+    if (sig === 'UNDERWEIGHT' || sig === 'Underweight') return 'var(--green)';
     return 'transparent';
+  }
+
+  // Five-level rating rank used for the matrix letter badge (strongest -> weakest).
+  function signalRank(sig) {
+    const ranks = {
+      Buy: 2, BUY: 2, Overweight: 1, OVERWEIGHT: 1,
+      Hold: 0, HOLD: 0,
+      Underweight: -1, UNDERWEIGHT: -1, Sell: -2, SELL: -2,
+    };
+    return ranks[sig] === undefined ? null : ranks[sig];
   }
 
   window.__SHAPE__.dashboardUtils = {
@@ -67,5 +87,6 @@
     signalColor,
     signalLabel,
     signalBg,
+    signalRank,
   };
 })();

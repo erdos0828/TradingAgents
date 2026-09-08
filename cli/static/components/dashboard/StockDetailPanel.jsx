@@ -4,7 +4,7 @@
   const { generateSampleCandles, calculateMA } = window.__SHAPE__.dashboardUtils;
 
   function StockDetailPanel() {
-    const { market, activeHolding, stockDetail } = useDashboard();
+    const { market, activeHolding, stockDetail, stockData } = useDashboard();
     const chartContainerRef = useRef(null);
     const chartRef = useRef(null);
 
@@ -26,6 +26,10 @@
         crosshair: { mode: window.LightweightCharts.CrosshairMode.Normal },
         rightPriceScale: { borderColor: '#2a3a4f' },
         timeScale: { borderColor: '#2a3a4f' },
+        // Let the mouse wheel scroll the page instead of zooming the chart
+        // (drag the time axis or pinch to zoom).
+        // handleScale: { mouseWheel: false },
+        // handleScroll: { mouseWheel: false },
       });
       chartRef.current = chart;
 
@@ -38,7 +42,7 @@
         wickDownColor: '#10b981',
       });
 
-      const data = generateSampleCandles(market);
+      const data = stockData ? stockData.candles : generateSampleCandles(market);
       candlestickSeries.setData(data);
 
       const colors = { ma5: '#f59e0b', ma10: '#3b82f6', ma20: '#8b5cf6', ma60: '#06b6d4' };
@@ -51,7 +55,16 @@
         series.setData(calculateMA(data, parseInt(key.slice(2))));
       });
 
-      chart.timeScale().fitContent();
+      // Default visible window: the last 3 months (full history stays scrollable).
+      const lastTime = data[data.length - 1].time;
+      const fromDate = new Date(lastTime + 'T00:00:00');
+      fromDate.setMonth(fromDate.getMonth() - 3);
+      const fromStr = fromDate.toISOString().split('T')[0];
+      try {
+        chart.timeScale().setVisibleRange({ from: fromStr, to: lastTime });
+      } catch (e) {
+        chart.timeScale().fitContent();
+      }
 
       const handleResize = () => {
         if (chartRef.current) {
@@ -67,7 +80,7 @@
           chartRef.current = null;
         }
       };
-    }, [market, activeHolding.code]);
+    }, [market, activeHolding.code, stockData]);
 
     const indicators = [
       { name: 'MA5', color: '#f59e0b' },
@@ -97,10 +110,6 @@
                 {stockDetail.change}
               </span>
             </div>
-          </div>
-          <div className="stock-actions">
-            <button className="btn btn-buy">买入</button>
-            <button className="btn btn-sell">卖出</button>
           </div>
         </div>
         <div className="chart-container" ref={chartContainerRef}></div>

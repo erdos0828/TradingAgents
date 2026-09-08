@@ -8,20 +8,23 @@
 
 | 区块 | 已用接口 | 说明 |
 |------|----------|------|
-| （暂无） | — | 当前所有区块均使用示例数据 |
+| 持仓全局看板 | `GET /api/dashboard/portfolio` | 由 `data/portfolio_holdings.json` + SQLite OHLCV 缓存计算：总市值、当日盈亏/涨跌幅、个股价与涨跌、持仓权重（`portfolio_summary_server._build_dashboard_portfolio`）。前端在 `dashboard/context.jsx` 中 fetch，失败时回退示例数据。 |
+| 个股速览与决策舱 / K 线图 | `GET /api/dashboard/stock/<ticker>` | SQLite OHLCV 缓存返回全部缓存历史 K 线（约 5 年、1200+ 根）+ 最新价/涨跌额/涨跌幅（`_build_dashboard_stock`，已过滤 NaN 行）。前端随选中持仓自动切换拉取，`StockDetailPanel` 用真实 K 线渲染 lightweight-charts + MA5/10/20/60，失败回退示例数据。买入/卖出按钮已移除。 |
+| 近 15 个交易日静态回测快照 | `GET /api/dashboard/matrix?date=YYYY-MM-DD` | 复用汇总页逻辑：`_get_recent_signals`（PM 五档评级 Buy/Overweight/Hold/Underweight/Sell）+ `_get_signal_outcomes`（T+1/+2/+3/+7/至今日涨跌与累计）。窗口自动过滤周六/周日（15 个自然日 → 11 个工作日列）；`date` 参数指定基准日（默认今天），响应含 `availableDates`（reports 中可用日期）供顶栏日期下拉联动。每个 cell 附 `reportDir`（当日最新报告目录名，`_report_dirs_by_date`），前端点击有报告的结点在新标签页打开 `/reports#ticker=<ticker>&date=<reportDir>` 报告详情页。`PerformanceMatrix` 渲染五档评级方块（B/OW/H/UW/S）+ 底部 3 格实际涨跌色条（红涨绿跌），悬停 tooltip 显示完整涨跌明细，失败回退示例数据。 |
+| 情绪分析 / 分析师观点 / 财务摘要 | `GET /api/dashboard/analysis/<ticker>` | 取该股最新报告快照（`_build_dashboard_analysis`）：情绪 = 市场分析师/基本面/新闻/交易员/组合经理五档评级换算 rank（Buy=+2 ~ Sell=-2）平均后映射 0-10 恐惧贪婪分 + 角色徽章；分析师观点 = SQLite `tradingview_ta` 投票（买入/卖出/中性 → 多空占比 + 综合评级）；财务摘要 = fundamentals.md 正则提取 PE(TTM/前向)/市净率/ROE/毛利率（LLM 文本容错提取，缺失显示 —）。前端随选中持仓联动拉取，`BottomCards` 渲染，失败回退示例数据。 |
 
 ## 示例数据待替换清单
 
 | 区块 | 当前数据来源 | 建议后续接入接口/数据 | 优先级 |
 |------|--------------|----------------------|--------|
 | 顶部指数条 | `sampleData.indices` 示例数据 | 上证指数/深证成指/创业板指（A股）；道琼斯/纳斯达克/标普500（美股）。可接入数据源聚合层或外部行情接口。 | 高 |
-| 持仓全局看板 | `sampleData.portfolio` + `sampleData.holdings` 示例数据 | `data/portfolio_holdings.json` 持仓文件 + 实时行情（yfinance/Alpha Vantage）计算总市值与盈亏。 | 高 |
-| 个股速览与决策舱 | `sampleData.stockDetail` + `sampleData.holdings` 示例数据 | 选中个股的 OHLCV 数据（`sqlite_cache`）+ 当前价/涨跌幅。 | 高 |
-| K 线图 | `generateSampleCandles()` 随机示例数据 | 选中个股的 OHLCV 历史数据（`sqlite_cache` / `tradingagents.dataflows.stockstats_utils.load_ohlcv`）。 | 高 |
+| 持仓全局看板 | ~~示例数据~~ 已接入 `GET /api/dashboard/portfolio`（见上表） | — | 已完成 |
+| 个股速览与决策舱 | ~~示例数据~~ 已接入 `GET /api/dashboard/stock/<ticker>`（见上表） | — | 已完成 |
+| K 线图 | ~~`generateSampleCandles()`~~ 已接入真实 OHLCV（见上表） | — | 已完成 |
 | 动态信号流 | `sampleData.signals` 示例数据 | 从 `reports/<ticker>/<date>/complete_report.md` 或 PM decision 中提取最新交易信号；也可由分析管线实时生成。 | 中 |
-| 情绪分析 | `sampleData.sentiment` 示例数据 | 新闻/社交情绪得分（`get_news`、`get_social` 等）聚合为恐惧/贪婪指数。 | 中 |
-| 分析师观点 | `sampleData.analyst` 示例数据 | 综合市场/新闻/基本面分析师的多空投票比例。 | 中 |
-| 财务摘要 | `sampleData.financial` 示例数据 | `get_fundamentals` / `get_income_statement` / `get_balance_sheet` 返回的 PE、PB、ROE、毛利率等。 | 中 |
+| 情绪分析 | ~~示例数据~~ 已接入 `GET /api/dashboard/analysis/<ticker>`（见上表） | — | 已完成 |
+| 分析师观点 | ~~示例数据~~ 已接入 `GET /api/dashboard/analysis/<ticker>`（见上表） | — | 已完成 |
+| 财务摘要 | ~~示例数据~~ 已接入 `GET /api/dashboard/analysis/<ticker>`（见上表） | — | 已完成 |
 | 买入/卖出按钮 | 仅 UI 展示，无实际操作 | 后续可接入模拟/真实交易接口，或跳转至 `tradingagents analyze` 生成新报告。 | 低 |
 
 ## 原报告页面保留内容

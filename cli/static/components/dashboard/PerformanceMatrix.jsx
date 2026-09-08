@@ -1,42 +1,52 @@
 (function () {
   const { useState } = React;
   const { useDashboard } = window.__SHAPE__.dashboardContext;
-  const { signalLabel, signalColor } = window.__SHAPE__.dashboardUtils;
+  const { signalLabel, signalColor, signalRank } = window.__SHAPE__.dashboardUtils;
 
-  function PerfBar({ t1, signal }) {
-    if (!signal) {
-      return <div className="perf-bar" style={{ background: 'var(--border)', marginTop: '4px' }}></div>;
+  // Three-segment strip showing the actual T+1/T+2/T+3 direction (red=up, green=down).
+  function PerfBar({ entry }) {
+    if (!entry || !entry.rating) {
+      return <div className="perf-bar-stack" style={{ marginTop: '4px' }}></div>;
     }
-    let correct = false;
-    if (signal === 'BUY') correct = t1 > 0;
-    else if (signal === 'SELL') correct = t1 < 0;
-    else correct = Math.abs(t1) < 0.8;
-    const color = correct ? 'var(--red)' : 'var(--green)';
-    return (
-      <div className="perf-bar-stack" style={{ marginTop: '4px' }}>
-        <div className="perf-bar-seg" style={{ background: color, opacity: 0.9 }}></div>
-        <div className="perf-bar-seg" style={{ background: color, opacity: 0.6 }}></div>
-        <div className="perf-bar-seg" style={{ background: color, opacity: 0.35 }}></div>
-      </div>
-    );
+    const segs = [entry.ret1, entry.ret2, entry.ret3].map((ret, i) => {
+      const cls = ret === null || ret === undefined ? '' : ret >= 0 ? 'up' : 'down';
+      return <div key={i} className={`perf-bar-seg ${cls}`}></div>;
+    });
+    return <div className="perf-bar-stack" style={{ marginTop: '4px' }}>{segs}</div>;
+  }
+
+  // Letter badge for the five-level rating: B / OW- / H / UW- / S (rank drives the glyph).
+  function ratingLetter(rating) {
+    const map = {
+      Buy: 'B', BUY: 'B',
+      Overweight: 'OW', OVERWEIGHT: 'OW',
+      Hold: 'H', HOLD: 'H',
+      Underweight: 'UW', UNDERWEIGHT: 'UW',
+      Sell: 'S', SELL: 'S',
+    };
+    return map[rating] || '·';
   }
 
   function StatRow({ rows }) {
-    const total = rows.length;
-    const stats = rows.reduce((acc, e) => {
-      if (!e.signal) acc.none++;
-      else if (e.signal === 'BUY' && e.t1 > 0) acc.correct++;
-      else if (e.signal === 'SELL' && e.t1 < 0) acc.correct++;
-      else if (e.signal === 'HOLD' && Math.abs(e.t1) < 0.8) acc.correct++;
-      else acc.wrong++;
-      return acc;
-    }, { correct: 0, wrong: 0, none: 0 });
-    const active = total - stats.none;
-    const acc = active ? (stats.correct / active) * 100 : 0;
+    let correct = 0;
+    let wrong = 0;
+    let none = 0;
+    rows.forEach((e) => {
+      if (!e.rating) { none++; return; }
+      const rank = signalRank(e.rating);
+      // Judge by T+1 direction vs the rating direction: bullish ratings expect a rise.
+      if (e.ret1 === null || e.ret1 === undefined) { none++; return; }
+      if (rank > 0 && e.ret1 > 0) correct++;
+      else if (rank < 0 && e.ret1 < 0) correct++;
+      else if (rank === 0) { if (Math.abs(e.ret1) < 1.5) correct++; else wrong++; }
+      else wrong++;
+    });
+    const active = rows.length - none;
+    const acc = active ? (correct / active) * 100 : 0;
     return (
       <div className="matrix-stats">
-        <span style={{ color: 'var(--red)' }}>✓ {stats.correct}</span>
-        <span style={{ color: 'var(--green)' }}>✗ {stats.wrong}</span>
+        <span style={{ color: 'var(--red)' }}>✓ {correct}</span>
+        <span style={{ color: 'var(--green)' }}>✗ {wrong}</span>
         <span style={{ color: 'var(--accent)' }}>{acc.toFixed(0)}%</span>
       </div>
     );
@@ -59,6 +69,17 @@
       });
     };
 
+    const fmtPct = (v) => (v === null || v === undefined ? null : `${v >= 0 ? '+' : ''}${v.toFixed(2)}%`);
+
+    // Jump to the report detail page for the clicked cell's date.
+    const openReport = (stock, entry) => {
+      if (!entry || !entry.reportDir || !stock.ticker) return;
+      window.open(
+        '/reports#ticker=' + encodeURIComponent(stock.ticker) + '&date=' + encodeURIComponent(entry.reportDir),
+        '_blank'
+      );
+    };
+
     const currentTip = tip ? (
       <div
         className="matrix-tooltip"
@@ -66,30 +87,40 @@
       >
         <div className="matrix-tooltip-header">
           <span>{tip.stock.name} ({tip.stock.code})</span>
-          <span>2026-{tip.day.date}</span>
+          <span>{tip.day.fullDate || tip.day.date}</span>
         </div>
-        {tip.entry.signal ? (
+        {tip.entry.rating ? (
           <>
             <div className="matrix-tooltip-signal">
               信号：
               <span
-                className={`matrix-tooltip-badge ${signalColor(tip.entry.signal)}`}
+                className={`matrix-tooltip-badge ${signalColor(tip.entry.rating)}`}
               >
-                {tip.entry.signal} · {signalLabel(tip.entry.signal)}
+                {tip.entry.rating} · {signalLabel(tip.entry.rating)}
               </span>
             </div>
-            <div className="matrix-tooltip-row">
-              <span>T+1 日涨跌</span>
-              <span style={{ color: tip.entry.t1 >= 0 ? 'var(--red)' : 'var(--green)' }}>
-                {tip.entry.t1 >= 0 ? '+' : ''}{tip.entry.t1.toFixed(2)}%
-              </span>
+            <div className="matrix-tooltip-ret matrix-tooltip-ret-head">
+              <span></span>
+              <span>日涨跌</span>
+              <span>累计</span>
             </div>
-            <div className="matrix-tooltip-row">
-              <span>T+2 日累计</span>
-              <span style={{ color: tip.entry.t2 >= 0 ? 'var(--red)' : 'var(--green)' }}>
-                {tip.entry.t2 >= 0 ? '+' : ''}{tip.entry.t2.toFixed(2)}%
-              </span>
-            </div>
+            {[
+              ['T+1', tip.entry.ret1, tip.entry.cum1],
+              ['T+2', tip.entry.ret2, tip.entry.cum2],
+              ['T+3', tip.entry.ret3, tip.entry.cum3],
+              ['T+7', tip.entry.ret7, tip.entry.cum7],
+              ['至今', tip.entry.retLatest, tip.entry.cumLatest],
+            ].map(([label, ret, cum]) => (
+              <div className="matrix-tooltip-ret" key={label}>
+                <span className="ret-label">{label}</span>
+                <span style={{ color: fmtPct(ret) ? (ret >= 0 ? 'var(--red)' : 'var(--green)') : 'var(--text-secondary)' }}>
+                  {fmtPct(ret) || '无数据'}
+                </span>
+                <span style={{ color: fmtPct(cum) ? (cum >= 0 ? 'var(--red)' : 'var(--green)') : 'var(--text-secondary)' }}>
+                  {fmtPct(cum) || '无数据'}
+                </span>
+              </div>
+            ))}
           </>
         ) : (
           <div className="matrix-tooltip-empty">当日无系统信号</div>
@@ -105,9 +136,11 @@
         </div>
 
         <div className="matrix-legend">
-          <div className="matrix-legend-item"><span className="legend-dot" style={{ background: 'var(--red)' }}></span>买入</div>
-          <div className="matrix-legend-item"><span className="legend-dot" style={{ background: 'var(--green)' }}></span>卖出</div>
-          <div className="matrix-legend-item"><span className="legend-dot" style={{ background: 'var(--orange)' }}></span>持有</div>
+          <div className="matrix-legend-item"><span className="legend-dot" style={{ background: '#dc2626' }}></span>买入</div>
+          <div className="matrix-legend-item"><span className="legend-dot" style={{ background: '#ef4444' }}></span>增持</div>
+          <div className="matrix-legend-item"><span className="legend-dot" style={{ background: '#ca8a04' }}></span>持有</div>
+          <div className="matrix-legend-item"><span className="legend-dot" style={{ background: '#22c55e' }}></span>减持</div>
+          <div className="matrix-legend-item"><span className="legend-dot" style={{ background: '#16a34a' }}></span>卖出</div>
           <div className="matrix-legend-item"><span className="legend-dot" style={{ background: 'var(--border)' }}></span>无信号</div>
         </div>
 
@@ -142,17 +175,20 @@
                       <div className="matrix-stock-code">{s.code}</div>
                     </td>
                     {rowData.map((e, i) => {
-                      const letter = e.signal ? e.signal[0] : '·';
+                      const letter = e.rating ? ratingLetter(e.rating) : '·';
+                      const clickable = !!e.reportDir && !!s.ticker;
                       return (
                         <td key={i} className="matrix-td-cell">
                           <div
-                            className={`matrix-cell ${e.signal ? signalColor(e.signal) : 'empty'}`}
-                            onMouseEnter={(ev) => handleHover(s, tradingDays[i], e, ev.currentTarget)}
+                            className={`matrix-cell ${e.rating ? signalColor(e.rating) : 'empty'}${clickable ? ' clickable' : ''}`}
+                            onMouseEnter={(ev) => handleHover(s, tradingDays[i] || e, e, ev.currentTarget)}
                             onMouseLeave={() => setTip(null)}
+                            onClick={() => openReport(s, e)}
+                            title={clickable ? '点击查看报告详情' : undefined}
                           >
                             {letter}
                           </div>
-                          <PerfBar t1={e.t1} signal={e.signal} />
+                          <PerfBar entry={e} />
                         </td>
                       );
                     })}
@@ -167,7 +203,7 @@
         </div>
 
         <div className="matrix-footer">
-          <span>底部三色绩效条：红色=信号命中（上涨） 绿色=未命中（下跌） 灰色=无数据</span>
+          <span>底部三格色条：信号后 1/2/3 日实际涨跌（红涨 绿跌 灰无数据）· 悬停查看 T+1/T+2/T+3/T+7/至今涨跌与累计</span>
         </div>
 
         {currentTip}
