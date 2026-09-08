@@ -177,6 +177,36 @@ def report_index():
     return Response(INDEX_HTML, mimetype="text/html; charset=utf-8")
 
 
+@app.route("/dashboard")
+def dashboard():
+    """Serve the new TradingAgents dashboard (experimental UI redesign)."""
+    dashboard_path = BASE_DIR / "cli" / "static" / "dashboard.html"
+    if dashboard_path.exists():
+        return Response(dashboard_path.read_text(encoding="utf-8"), mimetype="text/html; charset=utf-8")
+    return "Dashboard not found", 404
+
+@app.route("/dashboard2")
+def dashboard2():
+    """Serve the new TradingAgents dashboard (experimental UI redesign)."""
+    dashboard_path = BASE_DIR / "cli" / "static" / "index.html"
+    if dashboard_path.exists():
+        return Response(dashboard_path.read_text(encoding="utf-8"), mimetype="text/html; charset=utf-8")
+    return "Dashboard not found", 404
+
+
+@app.route("/components/<path:file_path>")
+def serve_component(file_path):
+    """Serve JSX component files for the dashboard2 SPA."""
+    components_dir = BASE_DIR / "cli" / "static" / "components"
+    target = components_dir / file_path
+    if not target.exists() or not target.is_file():
+        return "Not found", 404
+    real_path = target.resolve()
+    if not str(real_path).startswith(str(components_dir.resolve())):
+        return "Not found", 404
+    return Response(target.read_text(encoding="utf-8"), mimetype="text/javascript; charset=utf-8")
+
+
 @app.route("/api/reports")
 def api_reports():
     return jsonify(scan_reports(REPORTS_DIR))
