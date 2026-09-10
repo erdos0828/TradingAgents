@@ -487,32 +487,61 @@ body {
     margin-left: 8px;
 }
 
-.chart-container {
-    flex: 1;
-    min-height: 300px;
-    border-radius: 8px;
-    overflow: hidden;
-    background: var(--bg-secondary);
+/* Holding metrics strip under the stock header (value / qty / pnl /
+   today's trades). */
+.holding-metrics {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 12px;
+    padding: 12px 0;
     margin-bottom: 12px;
+    border-top: 1px solid var(--border);
 }
 
-.indicators-bar {
-    display: flex;
-    gap: 16px;
+.metric-block .metric-label {
     font-size: 12px;
     color: var(--text-secondary);
+    margin-bottom: 4px;
 }
 
-.indicator-tag {
+.metric-block .metric-value {
+    font-size: 18px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+}
+
+.metric-block .metric-sub {
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin-top: 2px;
+    font-variant-numeric: tabular-nums;
+}
+
+/* Today's trades block: one red buy / green sell line per executed trade. */
+.metric-block .metric-value.trade-lines {
     display: flex;
-    align-items: center;
-    gap: 6px;
+    flex-direction: column;
+    gap: 2px;
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 1.4;
 }
 
-.indicator-tag .dot {
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
+.holding-metrics .profit { color: var(--red); }
+.holding-metrics .loss { color: var(--green); }
+
+/* TradingView full charting library container. Indicators, panes, drawing
+   tools and the crosshair data window all come from the library itself. */
+.tv-chart-wrap {
+    flex: 1;
+    border-radius: 8px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    background: #131722;
+}
+
+.tv-chart-container {
+    height: 520px;
 }
 
 /* Right: Signal Stream */

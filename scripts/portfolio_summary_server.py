@@ -14,11 +14,12 @@ import math
 import os
 import re
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
+import pandas as pd
 from dotenv import load_dotenv
-from flask import Flask, Response, jsonify, render_template_string, request
+from flask import Flask, Response, jsonify, render_template_string, request, send_from_directory
 
 # Make sibling modules importable when running as `python -m scripts.xxx`
 _scripts_dir = Path(__file__).resolve().parent
@@ -32,6 +33,7 @@ from send_portfolio_summary import (
     _get_price_history,
     _get_recent_signals,
     _get_signal_outcomes,
+    _aggregate_trades,
     _load_holdings,
     _load_transactions,
     _recent_dates,
@@ -215,6 +217,233 @@ def serve_component(file_path):
     return Response(target.read_text(encoding="utf-8"), mimetype=f"{mimetype}; charset=utf-8")
 
 
+# ---------------------------------------------------------------------------
+# TradingView charting library assets + UDF datafeed endpoints.
+#
+# The stock overview panel is powered by the full TradingView charting
+# library (the same engine behind the chanlun-pro charts). Candles are
+# served from our own SQLite OHLCV cache through the UDF protocol below;
+# daily bars are aggregated with pandas for the weekly / monthly views.
+# ---------------------------------------------------------------------------
+
+_TV_LIB_DIR = BASE_DIR / "cli" / "static" / "tv"
+_TV_RESOLUTIONS = ["D", "W", "M"]
+
+
+@app.route("/tv_lib/<path:file_path>")
+def serve_tv_lib(file_path):
+    """Serve the TradingView charting library and UDF datafeed bundle."""
+    if not _TV_LIB_DIR.exists():
+        return "TradingView library not installed", 404
+    return send_from_directory(_TV_LIB_DIR, file_path)
+
+
+def _tv_symbol_ticker(symbol: str) -> str:
+    """Extract the ticker from a UDF symbol string ("SH:600006" / "600006.SS")."""
+    return symbol.split(":")[-1]
+
+
+def _tv_exchange(ticker: str) -> str:
+    """Non-empty exchange is required by the library's SymbolInfo validation."""
+    if ticker.endswith(".SS"):
+        return "SSE"
+    if ticker.endswith(".SZ"):
+        return "SZSE"
+    return "US"
+
+
+def _tv_resample_daily(df: pd.DataFrame, resolution: str) -> pd.DataFrame:
+    """Aggregate daily bars into weekly (W-FRI) or monthly (ME) bars."""
+    rule = {"W": "W-FRI", "M": "ME"}.get(resolution)
+    if rule is None:
+        return df
+    agg = (
+        df.set_index("Date")
+        .resample(rule)
+        .agg({"Open": "first", "High": "max", "Low": "min", "Close": "last", "Volume": "sum"})
+        .dropna(subset=["Open"])
+        .reset_index()
+    )
+    return agg
+
+
+@app.route("/tv/config")
+def tv_config():
+    return jsonify(
+        {
+            "supported_resolutions": _TV_RESOLUTIONS,
+            "supports_group_request": False,
+            "supports_marks": True,
+            "supports_search": True,
+            "supports_timescale_marks": False,
+        }
+    )
+
+
+@app.route("/tv/search")
+def tv_search():
+    """Symbol search over the holdings list (kept minimal: no full exchange)."""
+    query = request.args.get("query", "").lower()
+    results = []
+    for h in _load_holdings(HOLDINGS_PATH):
+        ticker = h.get("ticker", "")
+        name = h.get("name", "")
+        if not ticker:
+            continue
+        if query in ticker.lower() or query in name.lower():
+            results.append(
+                {
+                    "symbol": ticker,
+                    "full_name": name,
+                    "description": name,
+                    "exchange": "",
+                    "ticker": ticker,
+                    "type": "stock",
+                }
+            )
+    return jsonify(results)
+
+
+@app.route("/tv/time")
+def tv_time():
+    return str(int(datetime.now().timestamp()))
+
+
+@app.route("/tv/symbols")
+def tv_symbols():
+    ticker = _tv_symbol_ticker(request.args.get("symbol", ""))
+    name = ticker
+    for h in _load_holdings(HOLDINGS_PATH):
+        if h.get("ticker") == ticker:
+            name = h.get("name", ticker)
+            break
+    return jsonify(
+        {
+            "name": f"{name} ({ticker})",
+            "ticker": ticker,
+            "description": name,
+            "type": "stock",
+            "session": "24x7",
+            "timezone": "Etc/UTC",
+            "exchange": _tv_exchange(ticker),
+            "listed_exchange": _tv_exchange(ticker),
+            "format": "price",
+            "pricescale": 100,
+            "minmovement": 1,
+            "has_intraday": False,
+            "has_daily": True,
+            "has_weekly_and_monthly": True,
+            "supported_resolutions": _TV_RESOLUTIONS,
+            "volume_precision": 0,
+            "data_status": "endofday",
+        }
+    )
+
+
+@app.route("/tv/history")
+def tv_history():
+    ticker = _tv_symbol_ticker(request.args.get("symbol", ""))
+    resolution = request.args.get("resolution", "D")
+    try:
+        _from = int(request.args.get("from", "0"))
+        _to = int(request.args.get("to", "9999999999"))
+    except ValueError:
+        return jsonify({"s": "error", "errmsg": "invalid from/to"})
+
+    df = _get_price_history(ticker, CACHE_DIR, datetime.now().strftime("%Y-%m-%d"), days=None)
+    if df is None or df.empty:
+        return jsonify({"s": "no_data", "nextTime": None})
+    if resolution in ("W", "M"):
+        df = _tv_resample_daily(df, resolution)
+
+    t_list, o_list, h_list, l_list, c_list, v_list = [], [], [], [], [], []
+    bars = []
+    for _, row in df.iterrows():
+        try:
+            ts = int(pd.Timestamp(row["Date"]).tz_localize("UTC").timestamp())
+        except Exception:
+            continue
+        try:
+            o, h, l, c = float(row["Open"]), float(row["High"]), float(row["Low"]), float(row["Close"])
+        except (TypeError, ValueError):
+            continue
+        if math.isnan(o) or math.isnan(h) or math.isnan(l) or math.isnan(c):
+            continue
+        v = row.get("Volume")
+        v = float(v) if v == v and not math.isnan(float(v)) else 0.0
+        bars.append((ts, round(o, 4), round(h, 4), round(l, 4), round(c, 4), int(v)))
+
+    # UDF semantics: when the library sends `countback` it asks for that many
+    # bars counting back from `to` (the `from` bound is only a hint). Ignoring
+    # it made every page return fewer bars than requested, so the library's
+    # history paging shrank its window and stopped near the first page's
+    # left edge instead of walking back through the full history.
+    countback = request.args.get("countback")
+    if countback:
+        try:
+            n = int(countback)
+        except ValueError:
+            n = 0
+        bars = [b for b in bars if b[0] <= _to][-n:] if n > 0 else []
+    else:
+        bars = [b for b in bars if _from <= b[0] <= _to]
+
+    if not bars:
+        return jsonify({"s": "no_data", "nextTime": None})
+    for ts, o, h, l, c, v in bars:
+        t_list.append(ts)
+        o_list.append(o)
+        h_list.append(h)
+        l_list.append(l)
+        c_list.append(c)
+        v_list.append(v)
+    return jsonify({"s": "ok", "t": t_list, "o": o_list, "h": h_list, "l": l_list, "c": c_list, "v": v_list})
+
+
+@app.route("/tv/marks")
+def tv_marks():
+    ticker = _tv_symbol_ticker(request.args.get("symbol", ""))
+    try:
+        _from = int(request.args.get("from", "0"))
+        _to = int(request.args.get("to", "9999999999"))
+    except ValueError:
+        _from, _to = 0, 9999999999
+
+    marks = []
+    transactions = _load_transactions(TRANSACTIONS_PATH)
+    aggregated = _aggregate_trades(transactions.get(ticker, [])) if transactions else {}
+    idx = 0
+    for date, day_trades in aggregated.items():
+        try:
+            ts = int(datetime.strptime(date, "%Y-%m-%d").replace(tzinfo=timezone.utc).timestamp())
+        except ValueError:
+            continue
+        if not (_from <= ts <= _to):
+            continue
+        for side in ("buy", "sell"):
+            entry = day_trades.get(side)
+            if not entry or entry["qty"] <= 0:
+                continue
+            avg_price = round(entry["amount"] / entry["qty"], 4) if entry["qty"] else 0
+            marks.append(
+                {
+                    "id": f"trade-{idx}",
+                    "time": ts,
+                    # The library only honours named colors ("red"/"green",
+                    # as stored by chanlun-pro) — rgba/hex fall back to the
+                    # default orange.
+                    "color": "red" if side == "buy" else "green",
+                    "label": "B" if side == "buy" else "S",
+                    "labelFontColor": "white",
+                    "minSize": 24,
+                    "text": f"{'买入' if side == 'buy' else '卖出'} {entry['qty']} @ {avg_price}",
+
+                }
+            )
+            idx += 1
+    return jsonify(marks)
+
+
 def _dashboard_market(ticker: str) -> str:
     """Classify a ticker into a dashboard market key ('a-share' / 'us')."""
     if ticker.endswith(".SS") or ticker.endswith(".SZ"):
@@ -301,6 +530,19 @@ def _build_dashboard_portfolio() -> dict:
                 "costPrice": round(r["cost_price"], 4),
                 "marketValue": round(r["market_value"], 2),
                 "dailyPnl": round(r["daily_pnl"], 2),
+                "dailyPnlPercent": (
+                    f"{r['daily_pct']:+.2f}%" if r["daily_pct"] is not None else "—"
+                ),
+                "positionPnl": (
+                    round((r["latest"] - r["cost_price"]) * r["qty"], 2)
+                    if r["cost_price"]
+                    else None
+                ),
+                "positionPnlPercent": (
+                    f"{(r['latest'] / r['cost_price'] - 1) * 100:+.2f}%"
+                    if r["cost_price"]
+                    else "—"
+                ),
                 "priceDate": r["price_date"],
             })
 
@@ -333,7 +575,11 @@ def _build_dashboard_stock(ticker: str, candle_days: int | None = None) -> dict:
     """Build stock detail (latest quote + OHLCV candles) for the dashboard panel.
 
     Candles come straight from the SQLite OHLCV cache; ``candle_days`` limits the
-    row count (None returns the full cached history).
+    row count (None returns the full cached history). Each candle also carries
+    derived tooltip metrics (change/changePct/amplitude/turnover). The response
+    includes trade markers (buy/sell), per-date trade details for the tooltip,
+    and the holding's average cost price for the cost line — mirroring the
+    summary page's ``_build_lightweight_chart`` behaviour.
     """
     target_date = datetime.now().strftime("%Y-%m-%d")
     df = _get_price_history(ticker, CACHE_DIR, target_date, days=candle_days)
@@ -341,12 +587,17 @@ def _build_dashboard_stock(ticker: str, candle_days: int | None = None) -> dict:
         raise LookupError(f"No cached price for {ticker}")
 
     name = ticker
+    cost_price: float | None = None
     for h in _load_holdings(HOLDINGS_PATH):
         if h.get("ticker") == ticker:
             name = h.get("name", ticker)
+            raw_cost = h.get("cost_price")
+            if isinstance(raw_cost, (int, float)) and not math.isnan(raw_cost) and raw_cost > 0:
+                cost_price = round(float(raw_cost), 4)
             break
 
     candles = []
+    prev_close: float | None = None
     for _, row in df.iterrows():
         try:
             time_str = row["Date"].strftime("%Y-%m-%d")
@@ -359,14 +610,21 @@ def _build_dashboard_stock(ticker: str, candle_days: int | None = None) -> dict:
         # Skip rows with missing OHLC values (NaN != NaN) so the JSON stays valid.
         if math.isnan(o) or math.isnan(h) or math.isnan(l) or math.isnan(c):
             continue
+        v = int(row["Volume"]) if row.get("Volume") == row.get("Volume") else 0
+        change = (c - prev_close) if prev_close is not None else None
         candles.append({
             "time": time_str,
             "open": o,
             "high": h,
             "low": l,
             "close": c,
-            "volume": int(row["Volume"]) if row.get("Volume") == row.get("Volume") else 0,
+            "volume": v,
+            "change": round(change, 4) if change is not None else None,
+            "changePct": round(change / prev_close * 100, 4) if change is not None and prev_close else None,
+            "amplitude": round((h - l) / prev_close * 100, 4) if prev_close else None,
+            "turnover": round(v * c, 4) if v else None,
         })
+        prev_close = c
 
     if not candles:
         raise LookupError(f"No valid OHLCV rows for {ticker}")
@@ -375,6 +633,32 @@ def _build_dashboard_stock(ticker: str, candle_days: int | None = None) -> dict:
     prev = candles[-2]["close"] if len(candles) > 1 else None
     change_amount = latest - prev if prev is not None else None
     change_pct = (change_amount / prev * 100) if prev not in (None, 0) else None
+
+    # Buy/sell markers plus per-date details for the crosshair tooltip
+    # (same aggregation rules as the summary page's chart).
+    transactions = _load_transactions(TRANSACTIONS_PATH)
+    aggregated = _aggregate_trades(transactions.get(ticker, [])) if transactions else {}
+    markers = []
+    trades_by_date: dict[str, list[dict]] = {}
+    for date, day_trades in aggregated.items():
+        entries = []
+        for side in ("buy", "sell"):
+            entry = day_trades.get(side)
+            if not entry or entry["qty"] <= 0:
+                continue
+            avg_price = round(entry["amount"] / entry["qty"], 4) if entry["qty"] else 0
+            markers.append({
+                "time": date,
+                "position": "belowBar" if side == "buy" else "aboveBar",
+                "color": "#ef4444" if side == "buy" else "#10b981",
+                "shape": "arrowUp" if side == "buy" else "arrowDown",
+                "text": "B" if side == "buy" else "S",
+                "size": 2,
+            })
+            entries.append({"side": side, "qty": entry["qty"], "avgPrice": avg_price})
+        if entries:
+            trades_by_date[date] = entries
+    markers.sort(key=lambda m: m["time"])
 
     return {
         "ticker": ticker,
@@ -388,6 +672,9 @@ def _build_dashboard_stock(ticker: str, candle_days: int | None = None) -> dict:
         "up": change_amount is None or change_amount >= 0,
         "priceDate": candles[-1]["time"] if candles else target_date,
         "candles": candles,
+        "markers": markers,
+        "tradesByDate": trades_by_date,
+        "costPrice": cost_price,
     }
 
 

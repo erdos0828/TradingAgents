@@ -42,6 +42,111 @@
     return ma;
   }
 
+  function calcEMA(candles, period) {
+    const k = 2 / (period + 1);
+    let prev = null;
+    return candles.map((c) => {
+      const ema = prev === null ? c.close : c.close * k + prev * (1 - k);
+      prev = ema;
+      return { time: c.time, value: ema };
+    });
+  }
+
+  // MACD (12, 26, 9), CN-market convention: bar = (DIF - DEA) * 2.
+  function calcMACD(candles, fast = 12, slow = 26, signal = 9) {
+    const emaFast = calcEMA(candles, fast);
+    const emaSlow = calcEMA(candles, slow);
+    const dif = candles.map((c, i) => ({
+      time: c.time,
+      value: emaFast[i].value - emaSlow[i].value,
+    }));
+    const k = 2 / (signal + 1);
+    let prev = null;
+    const dea = dif.map((d) => {
+      const v = prev === null ? d.value : d.value * k + prev * (1 - k);
+      prev = v;
+      return { time: d.time, value: v };
+    });
+    const histogram = dif.map((d, i) => {
+      const diff = d.value - dea[i].value;
+      return {
+        time: d.time,
+        value: diff * 2,
+        color: diff >= 0 ? '#ef4444' : '#10b981',
+      };
+    });
+    return { dif, dea, histogram };
+  }
+
+  // KDJ (9, 3, 3): RSV double-smoothed by SMA(x, 3, 1); J = 3K - 2D.
+  function calcKDJ(candles, n = 9) {
+    const k = [];
+    const d = [];
+    const j = [];
+    let prevK = 50;
+    let prevD = 50;
+    for (let i = 0; i < candles.length; i++) {
+      const first = Math.max(0, i - n + 1);
+      let hh = -Infinity;
+      let ll = Infinity;
+      for (let t = first; t <= i; t++) {
+        hh = Math.max(hh, candles[t].high);
+        ll = Math.min(ll, candles[t].low);
+      }
+      const rsv = hh === ll ? 50 : ((candles[i].close - ll) / (hh - ll)) * 100;
+      const curK = (prevK * 2 + rsv) / 3;
+      const curD = (prevD * 2 + curK) / 3;
+      const curJ = curK * 3 - curD * 2;
+      k.push({ time: candles[i].time, value: curK });
+      d.push({ time: candles[i].time, value: curD });
+      j.push({ time: candles[i].time, value: curJ });
+      prevK = curK;
+      prevD = curD;
+    }
+    return { k, d, j };
+  }
+
+  // RSI with Wilder smoothing (equivalent to CN-market SMA(x, n, 1)).
+  function calcRSI(candles, period) {
+    const out = [];
+    let avgGain = null;
+    let avgLoss = null;
+    for (let i = 1; i < candles.length; i++) {
+      const change = candles[i].close - candles[i - 1].close;
+      const gain = Math.max(change, 0);
+      const loss = Math.max(-change, 0);
+      if (avgGain === null) {
+        avgGain = gain;
+        avgLoss = loss;
+      } else {
+        avgGain = (avgGain * (period - 1) + gain) / period;
+        avgLoss = (avgLoss * (period - 1) + loss) / period;
+      }
+      const rsi = avgLoss === 0 ? 100 : 100 - 100 / (1 + avgGain / avgLoss);
+      out.push({ time: candles[i].time, value: rsi });
+    }
+    return out;
+  }
+
+  // BOLL (20, 2): population standard deviation, CN-market style.
+  function calcBOLL(candles, n = 20, width = 2) {
+    const mid = [];
+    const up = [];
+    const low = [];
+    for (let i = n - 1; i < candles.length; i++) {
+      let sum = 0;
+      for (let t = i - n + 1; t <= i; t++) sum += candles[t].close;
+      const m = sum / n;
+      let sq = 0;
+      for (let t = i - n + 1; t <= i; t++) sq += (candles[t].close - m) * (candles[t].close - m);
+      const sd = Math.sqrt(sq / n);
+      mid.push({ time: candles[i].time, value: m });
+      up.push({ time: candles[i].time, value: m + width * sd });
+      low.push({ time: candles[i].time, value: m - width * sd });
+    }
+    return { mid, up, low };
+  }
+
   function signalColor(sig) {
     if (sig === 'BUY' || sig === 'Buy') return 'signal-buy';
     if (sig === 'SELL' || sig === 'Sell') return 'signal-sell';
@@ -84,6 +189,11 @@
     formatNumber,
     generateSampleCandles,
     calculateMA,
+    calcEMA,
+    calcMACD,
+    calcKDJ,
+    calcRSI,
+    calcBOLL,
     signalColor,
     signalLabel,
     signalBg,

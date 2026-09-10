@@ -29,19 +29,19 @@
   }
 
   const A_HOLDINGS = [
-    { name: '贵州茅台', code: '600519', price: '1,768.00', change: '+0.70%', up: true, weight: '14.7%' },
-    { name: '宁德时代', code: '300750', price: '192.30', change: '+1.43%', up: true, weight: '12.8%' },
-    { name: '招商银行', code: '600036', price: '32.50', change: '-0.61%', up: false, weight: '10.5%' },
-    { name: '中国平安', code: '601318', price: '45.90', change: '+0.22%', up: true, weight: '9.2%' },
-    { name: '比亚迪', code: '002594', price: '245.80', change: '+1.12%', up: true, weight: '8.4%' },
+    { name: '贵州茅台', code: '600519', price: '1,768.00', change: '+0.70%', up: true, weight: '14.7%', quantity: 100, costPrice: 1720.0, marketValue: 176800.0, dailyPnl: 1229.1, dailyPnlPercent: '+0.70%', positionPnl: 4800.0, positionPnlPercent: '+2.79%' },
+    { name: '宁德时代', code: '300750', price: '192.30', change: '+1.43%', up: true, weight: '12.8%', quantity: 500, costPrice: 178.5, marketValue: 96150.0, dailyPnl: 1355.0, dailyPnlPercent: '+1.43%', positionPnl: 6900.0, positionPnlPercent: '+7.73%' },
+    { name: '招商银行', code: '600036', price: '32.50', change: '-0.61%', up: false, weight: '10.5%', quantity: 3000, costPrice: 34.8, marketValue: 97500.0, dailyPnl: -600.0, dailyPnlPercent: '-0.61%', positionPnl: -6900.0, positionPnlPercent: '-6.61%' },
+    { name: '中国平安', code: '601318', price: '45.90', change: '+0.22%', up: true, weight: '9.2%', quantity: 2000, costPrice: 44.1, marketValue: 91800.0, dailyPnl: 200.0, dailyPnlPercent: '+0.22%', positionPnl: 3600.0, positionPnlPercent: '+4.08%' },
+    { name: '比亚迪', code: '002594', price: '245.80', change: '+1.12%', up: true, weight: '8.4%', quantity: 300, costPrice: 252.0, marketValue: 73740.0, dailyPnl: 816.0, dailyPnlPercent: '+1.12%', positionPnl: -1860.0, positionPnlPercent: '-2.46%' },
   ];
 
   const US_HOLDINGS = [
-    { name: 'Apple', code: 'AAPL', price: '178.35', change: '+0.85%', up: true, weight: '18.2%' },
-    { name: 'Microsoft', code: 'MSFT', price: '332.40', change: '+0.32%', up: true, weight: '16.5%' },
-    { name: 'Tesla', code: 'TSLA', price: '245.60', change: '-1.20%', up: false, weight: '12.1%' },
-    { name: 'NVIDIA', code: 'NVDA', price: '460.15', change: '+1.45%', up: true, weight: '14.3%' },
-    { name: 'BABA', code: 'BABA', price: '88.20', change: '-0.55%', up: false, weight: '9.8%' },
+    { name: 'Apple', code: 'AAPL', price: '178.35', change: '+0.85%', up: true, weight: '18.2%', quantity: 150, costPrice: 168.2, marketValue: 26752.5, dailyPnl: 225.0, dailyPnlPercent: '+0.85%', positionPnl: 1522.5, positionPnlPercent: '+6.04%' },
+    { name: 'Microsoft', code: 'MSFT', price: '332.40', change: '+0.32%', up: true, weight: '16.5%', quantity: 80, costPrice: 320.0, marketValue: 26592.0, dailyPnl: 84.8, dailyPnlPercent: '+0.32%', positionPnl: 992.0, positionPnlPercent: '+3.88%' },
+    { name: 'Tesla', code: 'TSLA', price: '245.60', change: '-1.20%', up: false, weight: '12.1%', quantity: 60, costPrice: 268.0, marketValue: 14736.0, dailyPnl: -178.8, dailyPnlPercent: '-1.20%', positionPnl: -1344.0, positionPnlPercent: '-8.36%' },
+    { name: 'NVIDIA', code: 'NVDA', price: '460.15', change: '+1.45%', up: true, weight: '14.3%', quantity: 50, costPrice: 415.0, marketValue: 23007.5, dailyPnl: 328.0, dailyPnlPercent: '+1.45%', positionPnl: 2257.5, positionPnlPercent: '+10.88%' },
+    { name: 'BABA', code: 'BABA', price: '88.20', change: '-0.55%', up: false, weight: '9.8%', quantity: 400, costPrice: 92.5, marketValue: 35280.0, dailyPnl: -196.0, dailyPnlPercent: '-0.55%', positionPnl: -1720.0, positionPnlPercent: '-4.65%' },
   ];
 
   const A_SIGNALS = [
