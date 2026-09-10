@@ -105,7 +105,7 @@ cd TradingAgents
 
 Create a virtual environment in any of your favorite environment managers:
 ```bash
-conda create -n tradingagents python=3.12
+conda create -n tradingagents python=3.11
 conda activate tradingagents
 ```
 

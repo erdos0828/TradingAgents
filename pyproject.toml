@@ -7,7 +7,7 @@ name = "tradingagents"
 version = "0.3.1"
 description = "TradingAgents: Multi-Agents LLM Financial Trading Framework"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11,<3.12"
 dependencies = [
     "langchain-core>=0.3.81",
     "backtrader>=1.9.78.123",
@@ -46,6 +46,12 @@ dev = [
 bedrock = [
     "langchain-aws>=1.5.0",
 ]
+# Local chanlun computation core (fx/bi/segment/pivot/bs-point calc). Direct
+# reference to a sibling checkout, so it is intentionally NOT in the core
+# dependencies: pip install ".[chanlun]" on machines that have the checkout.
+chanlun = [
+    "chanlun-core @ file:///Users/tbsg/Git/Stock/chanlun-core",
+]
 
 [project.scripts]
 tradingagents = "cli.main:app"
@@ -70,7 +76,7 @@ filterwarnings = [
 
 [tool.ruff]
 line-length = 100
-target-version = "py310"
+target-version = "py311"
 extend-exclude = ["results", "worklog"]
 
 [tool.ruff.lint]
