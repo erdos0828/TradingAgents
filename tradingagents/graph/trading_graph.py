@@ -15,6 +15,7 @@ from tradingagents.agents.utils.agent_utils import (
     build_instrument_context,
     get_balance_sheet,
     get_cashflow,
+    get_chanlun_analysis,
     get_fundamentals,
     get_global_news,
     get_income_statement,
@@ -233,6 +234,12 @@ class TradingAgentsGraph:
                     get_balance_sheet,
                     get_cashflow,
                     get_income_statement,
+                ]
+            ),
+            "chanlun": ToolNode(
+                [
+                    # Chan Theory (Chanlun) structural analysis
+                    get_chanlun_analysis,
                 ]
             ),
         }
