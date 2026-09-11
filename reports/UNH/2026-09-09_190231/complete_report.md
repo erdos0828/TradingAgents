@@ -19,6 +19,8 @@ Generated: 2026-09-10 19:07:56
 | Neutral Analyst | N/A | Neutral Analyst: 各位同事，感谢Aggressive和Conservative两位分析师的精彩论述——一个高举基本面大旗、坚信“回调即机会”，另一个紧握技术与宏观警钟、强调“宁可错过也不犯错”。但作为Neutral Risk Analyst，我认为你们各自都抓住了真相的一部分，... |
 | Portfolio Manager | Overweight | 建议对UNH采取“超配”评级。初始以2%仓位在385美元附近建立核心观察仓，若价格在380-390美元关键支撑区企稳，并同时出现连续两日收于10日EMA上方及MACD突破零轴等技术反转信号，则逐步加仓。止损位设于375美元以控制风险。 |
 
+![多智能体评级总览：六个分析师角色评级汇聚为最终 OVERWEIGHT 超配](imgs/01-infographic-ratings-matrix.png)
+
 ## I. Analyst Team Reports
 
 ### Market Analyst
@@ -63,6 +65,8 @@ TradingView的综合技术分析给出了明确的“**卖出**”评级，其�
 | **波动与通道** | 布林带下轨 | 385.70 | 盘中破位后收回，需观察能否企稳 |
 | | ATR | 10.38 | 波动放大，风险升高 |
 | **市场共识** | TradingView总评 | SELL | 12票卖出 vs. 4票买入，空头占优 |
+
+![技术面看跌信号仪表盘：价格阶梯与MACD/RSI/ATR指标](imgs/02-infographic-technical-bearish.png)
 
 ### News Analyst
 ### 联合健康集团（UNH）及宏观环境综合分析报告
@@ -192,6 +196,8 @@ FINAL TRANSACTION PROPOSAL: **BUY**
 | ROE | 14.15% | 股东回报率良好 |
 | 最新季度净利润 | 54.84亿美元 | 盈利能力强劲且稳定 |
 | 现金及等价物 | 285.85亿美元 | 流动性充足，财务安全边际高 |
+
+![基本面双轮驱动：UnitedHealthcare与Optum闭环生态及财务数据](imgs/03-infographic-fundamental-moat.png)
 
 ### Chanlun Analyst
 FINAL TRANSACTION PROPOSAL: **SELL**
@@ -324,6 +330,8 @@ UNH的独特优势在于**UnitedHealthcare（保险）+ Optum（科技与服务�
 而我的答案无比清晰：UNH不仅会更强，还会用利润和分红证明——今天的回调，不过是给聪明钱送上的打折入场券。
 
 所以，别被一根阴线吓退。**坚定买入UNH，持有它穿越周期**。时间，永远站在优质资产这一边。
+
+![多空对决：牛方研究员与熊方研究员的核心论点交锋](imgs/04-scene-bull-vs-bear.png)
 
 ### Bear Researcher
 
@@ -468,3 +476,5 @@ Neutral Analyst: 各位同事，感谢Aggressive和Conservative两位分析师�
 **Investment Thesis**: 综合三位分析师的辩论，尽管存在短期技术面承压（如跌破10日均线、布林带破底）和宏观利率高企（10年期美债收益率4.8%）带来的估值压力，但UNH的核心基本面依然稳固。其由UnitedHealthcare保险业务与Optum科技服务构成的闭环生态形成了深厚护城河，并得到年化242亿美元自由现金流和健康资产负债表的强力支撑。公司通过取消30%事前授权、剥离非核心资产及投入15亿美元于AI等举措，展现了卓越的战略执行力以应对监管和成本挑战。中立分析师提出的“分阶段验证式建仓”策略被采纳，该策略既尊重了保守派对技术弱势和跳空风险的警示，又避免了因过度谨慎而错失Aggressive派所强调的优质买点。因此，在当前价位采取渐进式超配，是平衡长期价值与短期风险的最优解。
 
 **Time Horizon**: None
+
+![最终交易计划：OVERWEIGHT超配下的价位阶梯与加仓条件](imgs/05-infographic-trade-plan.png)
