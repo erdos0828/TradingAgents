@@ -91,7 +91,7 @@
         }
       : data.stockDetail[market];
 
-    // Fetch the report-based analysis cards (sentiment / analyst / financial)
+    // Fetch the report-based analysis cards (sentiment / analyst / chanlun)
     // whenever the selected holding changes; keep sample data on failure.
     useEffect(() => {
       if (!activeTicker) return undefined;
@@ -115,16 +115,12 @@
     const analyst = analysisData && analysisData.analyst
       ? analysisData.analyst
       : data.analyst[market];
-    const financial = analysisData && analysisData.financial
-      ? {
-          pe: analysisData.financial.pe || '—',
-          pb: analysisData.financial.pb || '—',
-          roe: analysisData.financial.roe || '—',
-          margin: analysisData.financial.margin || '—',
-          peForward: analysisData.financial.peForward,
-          reportDate: analysisData.reportDate,
-        }
-      : data.financial[market];
+    // When the API responds but carries no chanlun payload (chanlun-core
+    // missing or insufficient bars), keep null so the card shows placeholders
+    // instead of falling back to sample data.
+    const chanlun = analysisData
+      ? analysisData.chanlun || null
+      : data.chanlun[market];
 
     const setMarketAndReset = (nextMarket) => {
       setMarket(nextMarket);
@@ -142,7 +138,7 @@
       signals,
       sentiment,
       analyst,
-      financial,
+      chanlun,
       stockDetail,
       stockData,
       tradingDays,

@@ -14,7 +14,7 @@ import math
 import os
 import re
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pandas as pd
@@ -825,20 +825,6 @@ def _extract_role_rating(text: str, patterns: list[str]) -> str | None:
     return None
 
 
-def _extract_metric_value(text: str, keywords: list[str]) -> str | None:
-    """Extract the first number appearing shortly after any keyword.
-
-    LLM-generated fundamentals prose is inconsistent (``市净率为1.35倍``,
-    ``**市净率**：43.47``, ``| ROE | 148.75% |``), so allow up to six
-    non-numeric separator characters between the keyword and the number.
-    """
-    for kw in keywords:
-        match = re.search(re.escape(kw) + r"[^0-9+\-]{0,6}([+-]?\d+(?:\.\d+)?)", text)
-        if match:
-            return match.group(1)
-    return None
-
-
 def _latest_report_dir(ticker: str) -> Path | None:
     """Locate the latest dated report snapshot containing a PM decision."""
     ticker_dir = REPORTS_DIR / ticker
@@ -855,13 +841,102 @@ def _latest_report_dir(ticker: str) -> Path | None:
     return sorted(candidates, key=lambda d: d.name)[-1]
 
 
+# Memoized Chanlun summaries keyed by (ticker, anchor date): the structure
+# only changes with new bars, so compute once per ticker per day.
+_chanlun_summary_memo: dict[tuple[str, str], dict | None] = {}
+
+
+def _extract_chanlun_summary(cd) -> dict | None:
+    """Distill a computed Chanlun structure into dashboard card fields."""
+    bis = cd.get_bis()
+    if not bis:
+        return None
+    last_bi = bis[-1]
+    zss = cd.get_bi_zss()
+
+    # Latest buy/sell point: the most recent line (bi or xd) carrying an MMD.
+    mmd = None
+    mmd_date = None
+    lines = sorted(
+        list(bis[-9:]) + list(cd.get_xds()[-3:]),
+        key=lambda line: line.end.k.date,
+        reverse=True,
+    )
+    for line in lines:
+        codes = cd.get_line_mmds(line)
+        if codes:
+            mmd = codes
+            mmd_date = f"{line.end.k.date:%Y-%m-%d}"
+            break
+
+    trend = cd.zss_is_qs(zss[-2], zss[-1]) if len(zss) >= 2 else None
+    last_zs = zss[-1] if zss else None
+    last_bar = cd.get_src_klines()[-1]
+    return {
+        "dataDate": f"{last_bar.date:%Y-%m-%d}",
+        "close": round(float(last_bar.c), 2),
+        "biDirection": last_bi.type,
+        "biDone": bool(last_bi.is_done()),
+        "biStart": f"{last_bi.start.k.date:%Y-%m-%d}",
+        "trend": trend,
+        "mmd": mmd,
+        "mmdDate": mmd_date,
+        "bc": cd.get_line_bcs(last_bi) or None,
+        "zsZD": round(float(last_zs.zd), 2) if last_zs else None,
+        "zsZG": round(float(last_zs.zg), 2) if last_zs else None,
+    }
+
+
+def _build_chanlun_summary(ticker: str) -> dict | None:
+    """Compute a live Chanlun (Chan Theory) structure summary for a ticker.
+
+    Reuses the optional chanlun-core package and the shared OHLCV SQLite cache
+    behind the Chanlun Analyst tool. Anchored to yesterday's local date so the
+    anchor never resolves to an intraday partial bar. Returns ``None`` when
+    chanlun-core is unavailable or the structure cannot be computed, letting
+    the dashboard card degrade gracefully.
+    """
+    from tradingagents.agents.utils import chanlun_tools
+
+    chanlun_core = chanlun_tools._import_chanlun_core()
+    if chanlun_core is None:
+        return None
+
+    curr_date = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
+    memo_key = (ticker, curr_date)
+    if memo_key in _chanlun_summary_memo:
+        return _chanlun_summary_memo[memo_key]
+
+    summary = None
+    try:
+        data = chanlun_tools.load_ohlcv(ticker, curr_date)
+        if data is not None and len(data) >= chanlun_tools._MIN_BARS:
+            klines = pd.DataFrame(
+                {
+                    "date": pd.to_datetime(data["Date"]),
+                    "open": data["Open"].astype(float),
+                    "high": data["High"].astype(float),
+                    "low": data["Low"].astype(float),
+                    "close": data["Close"].astype(float),
+                    "volume": data["Volume"].astype(float),
+                }
+            )
+            summary = _extract_chanlun_summary(chanlun_core.analyse(klines))
+    except Exception:  # noqa: BLE001 — any failure degrades to "no data"
+        summary = None
+
+    _chanlun_summary_memo[memo_key] = summary
+    return summary
+
+
 def _build_dashboard_analysis(ticker: str) -> dict:
     """Build the bottom analysis cards for a ticker from its latest report.
 
     - sentiment: averaged five-level ratings across analyst/trader/PM roles,
       mapped onto a 0-10 gauge score (0 extreme fear, 10 extreme greed)
     - analyst: TradingView TA cached vote split (bull vs bear share)
-    - financial: PE/PB/ROE/gross margin extracted from fundamentals.md
+    - chanlun: live Chan Theory structure summary (bi direction / pivot zone /
+      trend / buy-sell points) computed from the shared OHLCV cache
     """
     report_dir = _latest_report_dir(ticker)
     if report_dir is None:
@@ -915,24 +990,7 @@ def _build_dashboard_analysis(ticker: str) -> dict:
             "taDate": ta.get("date"),
         }
 
-    financial = None
-    fundamentals_path = report_dir / "1_analysts" / "fundamentals.md"
-    if fundamentals_path.exists():
-        text = fundamentals_path.read_text(encoding="utf-8", errors="ignore")
-        pe = _extract_metric_value(text, ["市盈率（TTM）", "TTM市盈率"])
-        pe_forward = pe is None
-        if pe_forward:
-            pe = _extract_metric_value(text, ["前向市盈率"])
-        pb = _extract_metric_value(text, ["市净率"])
-        roe = _extract_metric_value(text, ["ROE"])
-        margin = _extract_metric_value(text, ["毛利率"])
-        financial = {
-            "pe": pe,
-            "peForward": pe_forward,
-            "pb": pb,
-            "roe": None if roe is None else f"{roe}%",
-            "margin": None if margin is None else f"{margin}%",
-        }
+    chanlun = _build_chanlun_summary(ticker)
 
     return {
         "ticker": ticker,
@@ -940,7 +998,7 @@ def _build_dashboard_analysis(ticker: str) -> dict:
         "reportDir": report_dir.name,
         "sentiment": sentiment,
         "analyst": analyst,
-        "financial": financial,
+        "chanlun": chanlun,
     }
 
 

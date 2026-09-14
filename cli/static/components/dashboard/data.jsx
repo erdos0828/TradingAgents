@@ -101,9 +101,9 @@
       'a-share': { bull: 68, bear: 32 },
       'us': { bull: 55, bear: 45 },
     },
-    financial: {
-      'a-share': { pe: '28.5', pb: '4.2', roe: '18.2%', margin: '52.1%' },
-      'us': { pe: '32.1', pb: '8.5', roe: '25.4%', margin: '45.3%' },
+    chanlun: {
+      'a-share': { dataDate: '2026-09-09', close: 1768.0, biDirection: 'up', biDone: false, biStart: '2026-09-01', trend: 'up', mmd: '3buy', mmdDate: '2026-08-28', bc: null, zsZD: 1720.5, zsZG: 1780.2 },
+      'us': { dataDate: '2026-09-09', close: 178.35, biDirection: 'up', biDone: false, biStart: '2026-09-04', trend: 'up', mmd: null, mmdDate: null, bc: 'pz', zsZD: 172.1, zsZG: 181.4 },
     },
     stockDetail: {
       'a-share': { name: '贵州茅台', code: '600519.SH', price: '1,768.00', change: '+12.30 (+0.70%)', up: true },

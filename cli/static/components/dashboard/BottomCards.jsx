@@ -2,6 +2,27 @@
   const { useDashboard } = window.__SHAPE__.dashboardContext;
   const { signalColor, signalLabel } = window.__SHAPE__.dashboardUtils;
 
+  const MMD_LABELS = {
+    '1buy': '一买', '2buy': '二买', '3buy': '三买',
+    'l2buy': '类二买', 'l3buy': '类三买',
+    '1sell': '一卖', '2sell': '二卖', '3sell': '三卖',
+    'l2sell': '类二卖', 'l3sell': '类三卖',
+  };
+  const BC_LABELS = { bi: '笔背驰', xd: '线段背驰', pz: '盘整背驰', qs: '趋势背驰' };
+  const TREND_LABELS = { up: '上涨趋势', down: '下跌趋势' };
+
+  function joinLabels(codes, mapping) {
+    if (!codes) return null;
+    const labels = codes.split('|').filter(Boolean).map((c) => mapping[c] || c);
+    return labels.length ? labels.join('、') : null;
+  }
+
+  function dirColor(direction) {
+    if (direction === 'up') return 'var(--red)';
+    if (direction === 'down') return 'var(--green)';
+    return 'var(--text)';
+  }
+
   function recColor(rec) {
     if (/BUY/i.test(rec)) return 'var(--red)';
     if (/SELL/i.test(rec)) return 'var(--green)';
@@ -9,7 +30,9 @@
   }
 
   function BottomCards() {
-    const { sentiment, analyst, financial } = useDashboard();
+    const { sentiment, analyst, chanlun } = useDashboard();
+    const mmdText = joinLabels(chanlun && chanlun.mmd, MMD_LABELS);
+    const bcText = joinLabels(chanlun && chanlun.bc, BC_LABELS);
 
     return (
       <div className="bottom-row">
@@ -80,27 +103,48 @@
 
         <div className="analysis-card">
           <div className="card-title">
-            财务摘要
-            {financial.reportDate && <span className="subtitle">{financial.reportDate} 报告</span>}
+            缠论结构
+            {chanlun && chanlun.dataDate && <span className="subtitle">{chanlun.dataDate} 数据</span>}
           </div>
-          <div className="financial-grid">
-            <div className="financial-item">
-              <div className="label">{financial.peForward ? 'PE(前向)' : 'PE(TTM)'}</div>
-              <div className="value">{financial.pe}</div>
+          <div className="chanlun-grid">
+            <div className="chanlun-item">
+              <div className="label">当前笔</div>
+              <div className="value" style={{ color: chanlun ? dirColor(chanlun.biDirection) : 'var(--text)' }}>
+                {chanlun ? (chanlun.biDirection === 'up' ? '↑ 上涨' : '↓ 下跌') : '—'}
+              </div>
             </div>
-            <div className="financial-item">
-              <div className="label">PB</div>
-              <div className="value">{financial.pb}</div>
+            <div className="chanlun-item">
+              <div className="label">结构趋势</div>
+              <div className="value" style={{ color: chanlun ? dirColor(chanlun.trend) : 'var(--text)' }}>
+                {chanlun ? (TREND_LABELS[chanlun.trend] || '盘整延伸') : '—'}
+              </div>
             </div>
-            <div className="financial-item">
-              <div className="label">ROE</div>
-              <div className="value">{financial.roe}</div>
+            <div className="chanlun-item">
+              <div className="label">中枢区间</div>
+              <div className="value">{chanlun && chanlun.zsZD != null ? `${chanlun.zsZD}–${chanlun.zsZG}` : '—'}</div>
             </div>
-            <div className="financial-item">
-              <div className="label">毛利率</div>
-              <div className="value">{financial.margin}</div>
+            <div className="chanlun-item">
+              <div className="label">最近买卖点</div>
+              <div
+                className="value"
+                style={{ color: chanlun && mmdText ? (chanlun.mmd.includes('buy') ? 'var(--red)' : 'var(--green)') : 'var(--text)' }}
+              >
+                {chanlun ? (mmdText || '无') : '—'}
+              </div>
             </div>
           </div>
+          {chanlun && (
+            <div className="analyst-meta">
+              <span>
+                最新笔 <strong>{(chanlun.biStart || '').slice(5)} 起 · {chanlun.biDone ? '已完成' : '进行中'}</strong>
+              </span>
+              <span className="analyst-votes">
+                {chanlun.mmdDate && <>信号日 <strong>{chanlun.mmdDate.slice(5)}</strong> · </>}
+                {bcText && <>背驰 <strong>{bcText}</strong> · </>}
+                收盘 <strong>{chanlun.close}</strong>
+              </span>
+            </div>
+          )}
         </div>
       </div>
     );

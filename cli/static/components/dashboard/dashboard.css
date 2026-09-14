@@ -722,25 +722,25 @@ body {
     font-size: 12px;
 }
 
-.financial-grid {
+.chanlun-grid {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
     gap: 12px;
 }
 
-.financial-item {
+.chanlun-item {
     background: var(--bg-secondary);
     padding: 12px;
     border-radius: 8px;
 }
 
-.financial-item .label {
+.chanlun-item .label {
     font-size: 12px;
     color: var(--text-secondary);
     margin-bottom: 4px;
 }
 
-.financial-item .value {
+.chanlun-item .value {
     font-size: 18px;
     font-weight: 600;
 }
