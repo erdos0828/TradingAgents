@@ -106,9 +106,14 @@ class PolymarketResilienceTests(unittest.TestCase):
 class PolymarketRoutingTests(unittest.TestCase):
     def setUp(self):
         config_module._config = copy.deepcopy(default_config.DEFAULT_CONFIG)
+        # Hard reset restores the production default (response cache enabled);
+        # mocked vendor responses must not hit the on-disk cache. See
+        # conftest._isolate_config.
+        config_module._config["cache_tool_responses"] = False
 
     def tearDown(self):
         config_module._config = copy.deepcopy(default_config.DEFAULT_CONFIG)
+        config_module._config["cache_tool_responses"] = False
 
     def test_category_routes_to_polymarket(self):
         self.assertEqual(

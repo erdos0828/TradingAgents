@@ -45,6 +45,12 @@ def _isolate_config():
     test that sets e.g. ``tool_vendors`` would otherwise leak into later tests
     and make routing behavior order-dependent. Replace the global outright so
     every test starts from a clean DEFAULT_CONFIG.
+
+    The tool-response cache is disabled by default here: tests exercise
+    ``route_to_vendor`` with mocked vendors, and cached responses would leak
+    across tests through the on-disk SQLite DB. Dedicated cache tests
+    (test_tool_response_cache) re-enable it and point ``data_cache_dir`` at a
+    temporary directory.
     """
     import copy
 
@@ -52,8 +58,10 @@ def _isolate_config():
     import tradingagents.default_config as default_config
 
     config_module._config = copy.deepcopy(default_config.DEFAULT_CONFIG)
+    config_module._config["cache_tool_responses"] = False
     yield
     config_module._config = copy.deepcopy(default_config.DEFAULT_CONFIG)
+    config_module._config["cache_tool_responses"] = False
 
 
 @pytest.fixture()

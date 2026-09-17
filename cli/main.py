@@ -55,6 +55,7 @@ from cli.utils import (
     select_research_depth,
     select_shallow_thinking_agent,
 )
+from tradingagents.dataflows.config import set_config
 from tradingagents.default_config import DEFAULT_CONFIG
 from tradingagents.graph.analyst_execution import (
     AnalystWallTimeTracker,
@@ -1345,6 +1346,14 @@ def run_analysis(
         # Pass callbacks to graph config for tool execution tracking
         # (LLM tracking is handled separately via LLM constructor)
         args = graph.propagator.get_graph_args(callbacks=[stats_handler])
+
+        # Publish the current analysis context for tool-response cache metadata.
+        # This is also done inside propagate(); the CLI builds state directly,
+        # so it must set the context here too.
+        set_config({
+            "analysis_ticker": selections["ticker"],
+            "analysis_date": selections["analysis_date"],
+        })
 
         # Stream the analysis
         trace = []

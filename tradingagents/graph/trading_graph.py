@@ -437,6 +437,14 @@ class TradingAgentsGraph:
 
     def _run_graph(self, company_name, trade_date, asset_type: str = "stock"):
         """Execute the graph and write the resulting state to disk and memory log."""
+        # Publish the current analysis context so that tool-response cache rows
+        # record the ticker and trade date being analyzed, even for tools that
+        # do not take those arguments (global news, macro, prediction markets).
+        set_config({
+            "analysis_ticker": company_name,
+            "analysis_date": str(trade_date),
+        })
+
         # Initialize state — inject memory log context for PM and the
         # deterministically resolved instrument identity for all agents.
         past_context = self.memory_log.get_past_context(company_name)
