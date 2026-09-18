@@ -55,7 +55,9 @@ from cli.utils import (
     select_research_depth,
     select_shallow_thinking_agent,
 )
-from tradingagents.dataflows.config import set_config
+from tradingagents.agents.utils.agent_utils import resolve_instrument_identity
+from tradingagents.dataflows.config import get_config, set_config
+from tradingagents.dataflows.stockstats_utils import load_ohlcv
 from tradingagents.default_config import DEFAULT_CONFIG
 from tradingagents.graph.analyst_execution import (
     AnalystWallTimeTracker,
@@ -994,6 +996,84 @@ def _send_dingtalk_webhook(
         raise RuntimeError(f"DingTalk webhook error: {result}")
 
 
+def _load_portfolio_holding(ticker: str) -> dict | None:
+    """Load a single holding from the portfolio holdings file."""
+    config = get_config()
+    holdings_path = Path(
+        config.get("portfolio_holdings_path") or os.path.join("data", "portfolio_holdings.json")
+    )
+    if not holdings_path.is_absolute():
+        holdings_path = Path(config.get("project_dir", os.getcwd())) / holdings_path
+    try:
+        with open(holdings_path, encoding="utf-8") as f:
+            data = json.load(f)
+        for h in data.get("holdings", []):
+            if h.get("ticker") == ticker:
+                return {
+                    "name": h.get("name", ticker),
+                    "quantity": float(h.get("quantity", 0)),
+                    "cost_price": float(h.get("cost_price", 0)),
+                }
+    except Exception:
+        pass
+    return None
+
+
+def _format_recent_ohlcv(ticker: str, analysis_date: str, days: int = 3) -> tuple[str, float | None]:
+    """Return a markdown table of the most recent OHLCV rows and the latest close."""
+    try:
+        df = load_ohlcv(ticker, analysis_date)
+    except Exception:
+        return "", None
+    if df is None or df.empty or "Close" not in df.columns:
+        return "", None
+
+    df = df.sort_values("Date").tail(days + 1)
+    if len(df) < 2:
+        return "", None
+
+    rows = []
+    prev_close = None
+    latest_close = None
+    for _, row in df.iterrows():
+        date_str = str(row["Date"])[:10]
+        open_p = float(row.get("Open", 0) or 0)
+        high_p = float(row.get("High", 0) or 0)
+        low_p = float(row.get("Low", 0) or 0)
+        close_p = float(row.get("Close", 0) or 0)
+        latest_close = close_p
+        if prev_close is not None and prev_close:
+            change_pct = (close_p - prev_close) / prev_close * 100
+            change_str = f"{change_pct:+.2f}%"
+        else:
+            change_str = "-"
+        rows.append(
+            f"| {date_str} | {open_p:.2f} | {high_p:.2f} | {low_p:.2f} | {close_p:.2f} | {change_str} |"
+        )
+        prev_close = close_p
+
+    table = (
+        "| 日期 | 开盘 | 最高 | 最低 | 收盘 | 涨跌 |\n"
+        "| --- | --- | --- | --- | --- | --- |\n"
+        + "\n".join(rows[1:])
+    )
+    return table, latest_close
+
+
+def _format_holding_pnl(holding: dict, current_price: float) -> str:
+    """Return a markdown line for total cost, PnL and return rate."""
+    quantity = holding["quantity"]
+    cost_price = holding["cost_price"]
+    total_cost = quantity * cost_price
+    market_value = quantity * current_price
+    total_pnl = market_value - total_cost
+    pnl_pct = (total_pnl / total_cost * 100) if total_cost else 0.0
+    return (
+        f"**持仓成本：** {total_cost:,.2f}\n\n"
+        f"**总收益：** {total_pnl:+.2f} ({pnl_pct:+.2f}%)"
+    )
+
+
 def _build_dingtalk_report_message(
     ticker: str,
     analysis_date: str,
@@ -1002,7 +1082,16 @@ def _build_dingtalk_report_message(
     max_chars: int = 3000,
 ) -> tuple[str, str]:
     """Build (title, markdown_text) for the DingTalk report notification."""
-    title = f"TradingAgents 分析报告：{ticker} ({analysis_date})"
+    holding = _load_portfolio_holding(ticker)
+    display_name = holding["name"] if holding else None
+    if not display_name:
+        try:
+            identity = resolve_instrument_identity(ticker)
+            display_name = identity.get("company_name")
+        except Exception:
+            display_name = None
+    display_name = display_name or ticker
+    title = f"TradingAgents 分析报告：{display_name}（{ticker}）({analysis_date})"
 
     decision = ""
     risk_state = final_state.get("risk_debate_state", {})
@@ -1014,10 +1103,21 @@ def _build_dingtalk_report_message(
     if len(decision) > max_chars:
         decision = decision[:max_chars] + "\n\n...（内容已截断）"
 
+    recent_table, latest_close = _format_recent_ohlcv(ticker, analysis_date)
+    holding_lines = ""
+    if holding and latest_close is not None and latest_close > 0:
+        holding_lines = "\n\n" + _format_holding_pnl(holding, latest_close)
+    recent_section = (
+        f"**最近数据：**\n\n{recent_table}{holding_lines}\n\n"
+        if recent_table
+        else ""
+    )
+
     body = (
         f"## {title}\n\n"
         f"**报告路径：** `{save_path.resolve()}`\n\n"
-        f"**最终决策：**\n\n{decision or '（无最终决策）'}"
+        f"{recent_section}"
+        f"**最终决策：**\n\n{decision or '（无最终决策）'}\n\n"
     )
     return title, body
 

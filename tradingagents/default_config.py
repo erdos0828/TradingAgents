@@ -74,7 +74,7 @@ def _apply_env_overrides(config: dict) -> dict:
 
 
 DEFAULT_CONFIG = _apply_env_overrides({
-    "project_dir": os.path.abspath(os.path.join(os.path.dirname(__file__), ".")),
+    "project_dir": os.path.abspath(os.path.join(os.path.dirname(__file__), "..")),
     # results_dir: base directory for reports and logs.
     # Default: TRADINGAGENTS_HOME (cwd if not set). Reports go to {results_dir}/reports/
     "results_dir": os.getenv("TRADINGAGENTS_RESULTS_DIR", _TRADINGAGENTS_HOME),
