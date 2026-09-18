@@ -1,5 +1,6 @@
 import logging
 
+from . import akshare_data
 from .alpha_vantage import (
     get_balance_sheet as get_alpha_vantage_balance_sheet,
     get_cashflow as get_alpha_vantage_cashflow,
@@ -36,6 +37,28 @@ from .y_finance import (
 from .yfinance_news import get_global_news_yfinance, get_news_yfinance
 
 logger = logging.getLogger(__name__)
+
+# A-share tools are routed through akshare by default so that Chinese stocks use
+# domestic news and macro data instead of U.S.-centric vendors.
+_AKSHARE_ROUTED_TOOLS = {
+    "get_news",
+    "get_global_news",
+    "get_macro_indicators",
+}
+
+
+def _is_a_share(ticker: str) -> bool:
+    """Return True if the ticker is a mainland China A-share."""
+    if not ticker:
+        return False
+    upper = ticker.upper()
+    if upper.endswith((".SS", ".SZ", ".BJ")):
+        return True
+    # Bare 6-digit numeric codes (common in CLI/programmatic callers) are also
+    # treated as A-shares; the akshare implementation strips any suffix.
+    stripped = upper.split(".")[0]
+    return stripped.isdigit() and len(stripped) == 6
+
 
 # Tools organized by category
 TOOLS_CATEGORIES = {
@@ -83,6 +106,7 @@ TOOLS_CATEGORIES = {
 }
 
 VENDOR_LIST = [
+    "akshare",
     "yfinance",
     "fred",
     "polymarket",
@@ -149,10 +173,12 @@ VENDOR_METHODS = {
     },
     # news_data
     "get_news": {
+        "akshare": akshare_data.get_news,
         "alpha_vantage": get_alpha_vantage_news,
         "yfinance": get_news_yfinance,
     },
     "get_global_news": {
+        "akshare": akshare_data.get_global_news,
         "yfinance": get_global_news_yfinance,
         "alpha_vantage": get_alpha_vantage_global_news,
     },
@@ -162,6 +188,7 @@ VENDOR_METHODS = {
     },
     # macro_data
     "get_macro_indicators": {
+        "akshare": akshare_data.get_macro_data,
         "fred": get_fred_macro_data,
     },
     # prediction_markets
@@ -201,13 +228,22 @@ def _resolve_vendor_chain(method: str, category: str) -> list[str]:
     fallback, list them in order, e.g. data_vendors="yfinance,alpha_vantage".
     The "default" sentinel (no explicit config) uses all available vendors.
     """
-    vendor_config = get_vendor(category, method)
-    primary_vendors = [v.strip() for v in vendor_config.split(',')]
-
     if method not in VENDOR_METHODS:
         raise ValueError(f"Method '{method}' not supported")
 
     all_available_vendors = list(VENDOR_METHODS[method].keys())
+
+    # A-share analyses use akshare for news and China macro by default so that
+    # Chinese stocks are analyzed with domestic data rather than U.S. vendors.
+    if (
+        method in _AKSHARE_ROUTED_TOOLS
+        and _is_a_share(get_config().get("analysis_ticker", ""))
+        and "akshare" in all_available_vendors
+    ):
+        return ["akshare"]
+
+    vendor_config = get_vendor(category, method)
+    primary_vendors = [v.strip() for v in vendor_config.split(',')]
 
     explicit = [v for v in primary_vendors if v and v != "default"]
     if explicit:
