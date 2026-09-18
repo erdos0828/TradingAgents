@@ -22,6 +22,10 @@ def _reset_config():
     # Hard reset: set_config() merges, so empty DEFAULT dicts (e.g. tool_vendors)
     # don't clear keys leaked by other tests. Replace the global outright.
     config_module._config = copy.deepcopy(default_config.DEFAULT_CONFIG)
+    # Hard reset restores the production default (response cache enabled);
+    # mocked vendor responses must not hit the on-disk cache. See
+    # conftest._isolate_config.
+    config_module._config["cache_tool_responses"] = False
 
 
 def _no_data(symbol, *a, **k):

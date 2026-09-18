@@ -55,6 +55,7 @@ from cli.utils import (
     select_research_depth,
     select_shallow_thinking_agent,
 )
+from tradingagents.dataflows.config import set_config
 from tradingagents.default_config import DEFAULT_CONFIG
 from tradingagents.graph.analyst_execution import (
     AnalystWallTimeTracker,
@@ -113,6 +114,7 @@ class MessageBuffer:
         "social": "Sentiment Analyst",
         "news": "News Analyst",
         "fundamentals": "Fundamentals Analyst",
+        "chanlun": "Chanlun Analyst",
     }
 
     # Report section mapping: section -> (analyst_key for filtering, finalizing_agent)
@@ -123,6 +125,7 @@ class MessageBuffer:
         "sentiment_report": ("social", "Sentiment Analyst"),
         "news_report": ("news", "News Analyst"),
         "fundamentals_report": ("fundamentals", "Fundamentals Analyst"),
+        "chanlun_report": ("chanlun", "Chanlun Analyst"),
         "investment_plan": (None, "Research Manager"),
         "trader_investment_plan": (None, "Trader"),
         "final_trade_decision": (None, "Portfolio Manager"),
@@ -231,6 +234,7 @@ class MessageBuffer:
                 "sentiment_report": "Social Sentiment",
                 "news_report": "News Analysis",
                 "fundamentals_report": "Fundamentals Analysis",
+                "chanlun_report": "Chanlun Structure Analysis",
                 "investment_plan": "Research Team Decision",
                 "trader_investment_plan": "Trading Team Plan",
                 "final_trade_decision": "Portfolio Management Decision",
@@ -246,7 +250,7 @@ class MessageBuffer:
         report_parts = []
 
         # Analyst Team Reports - use .get() to handle missing sections
-        analyst_sections = ["market_report", "sentiment_report", "news_report", "fundamentals_report"]
+        analyst_sections = ["market_report", "sentiment_report", "news_report", "fundamentals_report", "chanlun_report"]
         if any(self.report_sections.get(section) for section in analyst_sections):
             report_parts.append("## Analyst Team Reports")
             if self.report_sections.get("market_report"):
@@ -264,6 +268,10 @@ class MessageBuffer:
             if self.report_sections.get("fundamentals_report"):
                 report_parts.append(
                     f"### Fundamentals Analysis\n{self.report_sections['fundamentals_report']}"
+                )
+            if self.report_sections.get("chanlun_report"):
+                report_parts.append(
+                    f"### Chanlun Structure Analysis\n{self.report_sections['chanlun_report']}"
                 )
 
         # Research Team Reports
@@ -671,7 +679,7 @@ def get_user_selections(cli_overrides: dict | None = None):
         if invalid:
             console.print(
                 f"[red]Error: Invalid analyst(s): {', '.join(invalid)}. "
-                "Use: market, social, news, fundamentals.[/red]"
+                "Use: market, social, news, fundamentals, chanlun.[/red]"
             )
             raise typer.Exit(code=1)
         selected_analysts = [analyst_map[a] for a in analyst_strs]
@@ -882,6 +890,8 @@ def display_complete_report(final_state):
         analysts.append(("News Analyst", final_state["news_report"]))
     if final_state.get("fundamentals_report"):
         analysts.append(("Fundamentals Analyst", final_state["fundamentals_report"]))
+    if final_state.get("chanlun_report"):
+        analysts.append(("Chanlun Analyst", final_state["chanlun_report"]))
     if analysts:
         console.print(Panel("[bold]I. Analyst Team Reports[/bold]", border_style="cyan"))
         for title, content in analysts:
@@ -1020,18 +1030,20 @@ def update_research_team_status(status):
 
 
 # Ordered list of analysts for status transitions
-ANALYST_ORDER = ["market", "social", "news", "fundamentals"]
+ANALYST_ORDER = ["market", "social", "news", "fundamentals", "chanlun"]
 ANALYST_AGENT_NAMES = {
     "market": "Market Analyst",
     "social": "Sentiment Analyst",
     "news": "News Analyst",
     "fundamentals": "Fundamentals Analyst",
+    "chanlun": "Chanlun Analyst",
 }
 ANALYST_REPORT_MAP = {
     "market": "market_report",
     "social": "sentiment_report",
     "news": "news_report",
     "fundamentals": "fundamentals_report",
+    "chanlun": "chanlun_report",
 }
 
 
@@ -1335,6 +1347,14 @@ def run_analysis(
         # (LLM tracking is handled separately via LLM constructor)
         args = graph.propagator.get_graph_args(callbacks=[stats_handler])
 
+        # Publish the current analysis context for tool-response cache metadata.
+        # This is also done inside propagate(); the CLI builds state directly,
+        # so it must set the context here too.
+        set_config({
+            "analysis_ticker": selections["ticker"],
+            "analysis_date": selections["analysis_date"],
+        })
+
         # Stream the analysis
         trace = []
         for chunk in graph.graph.stream(init_agent_state, **args):
@@ -1554,7 +1574,7 @@ def analyze(
     analysts: str | None = typer.Option(
         None,
         "--analysts",
-        help="Comma-separated analysts: market,social,news,fundamentals. Skips interactive prompt.",
+        help="Comma-separated analysts: market,social,news,fundamentals,chanlun. Skips interactive prompt.",
     ),
     auto_save: bool = typer.Option(
         False,
@@ -1814,7 +1834,7 @@ def analyze_portfolio(
         None, "--date", "-d", help="Analysis date in YYYY-MM-DD format (default: last trading day)"
     ),
     analysts: str = typer.Option(
-        "market,news,fundamentals", "--analysts", "-a", help="Comma-separated analysts"
+        "market,news,fundamentals,chanlun", "--analysts", "-a", help="Comma-separated analysts"
     ),
     no_dingtalk: bool = typer.Option(False, "--no-dingtalk", help="Disable DingTalk notification"),
     dry_run: bool = typer.Option(False, "--dry-run", help="Show commands without executing"),

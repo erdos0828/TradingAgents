@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>智投工作台 - TradingAgents</title>
+    <!-- Full TradingView charting library (same engine as the chanlun-pro
+         charts) + UDF datafeed bundle, served from cli/static/tv. -->
+    <script src="/tv_lib/charting_library/charting_library.standalone.js"></script>
+    <script src="/tv_lib/datafeeds/udf/dist/bundle.js"></script>
+    <script src="https://g.alicdn.com/code/lib/react/17.0.2/umd/react.development.js"></script>
+    <script src="https://g.alicdn.com/code/lib/react-dom/17.0.2/umd/react-dom.development.js"></script>
+    <script src="https://g.alicdn.com/code/lib/babel-standalone/7.25.0/babel.min.js"></script>
+    <link rel="stylesheet" href="./components/dashboard/dashboard.css">
+</head>
+<body>
+    <div id="root"></div>
+
+    <script>
+        window.__SHAPE__ = window.__SHAPE__ || {};
+        window.__SHAPE__.dashboardPages = window.__SHAPE__.dashboardPages || {};
+        window.__SHAPE__.dashboardLayout = window.__SHAPE__.dashboardLayout || {};
+        window.__SHAPE__.dashboardContext = window.__SHAPE__.dashboardContext || {};
+        window.__SHAPE__.dashboardUtils = window.__SHAPE__.dashboardUtils || {};
+        window.__SHAPE__.dashboardData = window.__SHAPE__.dashboardData || {};
+    </script>
+
+    <script type="text/babel" data-presets="react" src="./components/dashboard/data.jsx"></script>
+    <script type="text/babel" data-presets="react" src="./components/dashboard/utils.jsx"></script>
+    <script type="text/babel" data-presets="react" src="./components/dashboard/context.jsx"></script>
+    <script type="text/babel" data-presets="react" src="./components/dashboard/Header.jsx"></script>
+    <script type="text/babel" data-presets="react" src="./components/dashboard/PortfolioPanel.jsx"></script>
+    <script type="text/babel" data-presets="react" src="./components/dashboard/StockDetailPanel.jsx"></script>
+    <script type="text/babel" data-presets="react" src="./components/dashboard/SignalPanel.jsx"></script>
+    <script type="text/babel" data-presets="react" src="./components/dashboard/BottomCards.jsx"></script>
+    <script type="text/babel" data-presets="react" src="./components/dashboard/PerformanceMatrix.jsx"></script>
+    <script type="text/babel" data-presets="react" src="./components/dashboard/DashboardLayout.jsx"></script>
+    <script type="text/babel" data-presets="react" src="./components/dashboard/DashboardApp.jsx"></script>
+
+    <script type="text/babel" data-presets="react">
+        const rootEl = document.getElementById('root');
+        ReactDOM.render(React.createElement(window.__SHAPE__.dashboardPages.RootApp), rootEl);
+    </script>
+</body>
+</html>

@@ -53,8 +53,8 @@ def main():
     )
     parser.add_argument(
         "--analysts",
-        default="market,news,fundamentals",
-        help="Comma-separated analysts (default: market,news,fundamentals)",
+        default="market,news,fundamentals,chanlun",
+        help="Comma-separated analysts (default: market,news,fundamentals,chanlun)",
     )
     parser.add_argument(
         "--no-dingtalk",

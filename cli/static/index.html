@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="corporate">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>智投工作台 · 铸字行情台</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=IBM+Plex+Mono:wght@300;400;500;600&family=IBM+Plex+Sans:wght@300;400;500;600;700&family=IBM+Plex+Serif:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet" />
+  <link href="https://g.alicdn.com/code/lib/daisyui/5.1.25/daisyui.css" rel="stylesheet" type="text/css"/>
+  <link href="https://g.alicdn.com/code/lib/daisyui/5.1.25/themes.css" rel="stylesheet" type="text/css"/>
+  <script src="https://g.alicdn.com/code/lib/react/17.0.2/umd/react.development.js"></script>
+  <script src="https://g.alicdn.com/code/lib/react-dom/17.0.2/umd/react-dom.development.js"></script>
+  <script src="https://g.alicdn.com/code/lib/react-router-dom/5.3.4/react-router-dom.js"></script>
+  <script src="https://g.alicdn.com/code/lib/tailwindcss-browser/4.1.13/index.global.js"></script>
+  <script src="https://g.alicdn.com/code/lib/babel-standalone/7.25.0/babel.min.js"></script>
+
+  <style type="text/tailwindcss">
+    @theme {
+      --color-primary: #d4a373;
+      --color-primary-content: #0e1611;
+      --color-secondary: #b56553;
+      --color-secondary-content: #ecdcb8;
+      --color-accent: #eab308;
+      --color-neutral: #0e1611;
+      --color-base-100: #0e1611;
+      --color-base-200: #141d18;
+      --color-base-300: #1c2823;
+      --color-base-content: #ecdcb8;
+      --color-brand-muted: #8a8676;
+      --color-brand-border: #2a3630;
+      --color-signal-buy: #ef4444;
+      --color-signal-sell: #22c55e;
+      --color-signal-hold: #eab308;
+      --color-paper: #f2e7ce;
+      --color-ink: #1a1912;
+      --shadow-brand: rgba(0,0,0,0.55) 0px 24px 60px -30px, rgba(212,163,115,0.15) 0px 10px 30px -20px;
+      --radius-box: 0.25rem;
+      --radius-field: 0.25rem;
+      --radius-selector: 9999px;
+      --font-display: "DM Serif Display", "IBM Plex Serif", Georgia, serif;
+      --font-body: "IBM Plex Sans", system-ui, -apple-system, sans-serif;
+      --font-mono: "IBM Plex Mono", "SFMono-Regular", Consolas, monospace;
+      --font-serif: "IBM Plex Serif", "DM Serif Display", Georgia, serif;
+    }
+  </style>
+
+  <style>
+    html, body, #root {
+      background: #0e1611;
+      color: #ecdcb8;
+      min-height: 100vh;
+      font-family: "IBM Plex Sans", system-ui, sans-serif;
+    }
+    body {
+      background-image:
+        radial-gradient(circle at 20% 12%, rgba(212,163,115,0.08), transparent 40%),
+        radial-gradient(circle at 82% 88%, rgba(34,197,94,0.05), transparent 45%),
+        repeating-linear-gradient(
+          0deg,
+          rgba(236,220,184,0.015) 0px,
+          rgba(236,220,184,0.015) 1px,
+          transparent 1px,
+          transparent 3px
+        );
+    }
+    .font-display { font-family: "DM Serif Display", "IBM Plex Serif", Georgia, serif; letter-spacing: 0.01em; }
+    .font-serif-body { font-family: "IBM Plex Serif", "DM Serif Display", Georgia, serif; }
+    .font-mono-num { font-family: "IBM Plex Mono", "SFMono-Regular", Consolas, monospace; font-variant-numeric: tabular-nums; letter-spacing: 0.02em; }
+
+    .rule-double {
+      background-image: linear-gradient(#3a4a42 50%, transparent 50%), linear-gradient(#3a4a42 50%, transparent 50%);
+      background-repeat: no-repeat;
+      background-size: 100% 1px, 100% 1px;
+      background-position: 0 0, 0 4px;
+      height: 5px;
+    }
+    .rule-thick { border-bottom: 3px solid #2a3630; }
+
+    .panel {
+      background: linear-gradient(180deg, #141d18 0%, #101914 100%);
+      border: 1px solid #2a3630;
+      box-shadow: inset 0 1px 0 rgba(236,220,184,0.03), 0 20px 40px -30px rgba(0,0,0,0.7);
+    }
+    .paper {
+      background:
+        linear-gradient(180deg, #f2e7ce 0%, #e8dcbe 100%);
+      color: #1a1912;
+      box-shadow: inset 0 0 60px rgba(139, 108, 63, 0.1), 4px 6px 20px -6px rgba(0,0,0,0.5);
+      background-image:
+        radial-gradient(circle at 20% 20%, rgba(139,108,63,0.06), transparent 40%),
+        radial-gradient(circle at 85% 75%, rgba(139,108,63,0.05), transparent 45%);
+    }
+
+    .grain::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background-image:
+        radial-gradient(circle at 30% 40%, rgba(0,0,0,0.06) 1px, transparent 1px),
+        radial-gradient(circle at 70% 60%, rgba(0,0,0,0.04) 1px, transparent 1px);
+      background-size: 3px 3px, 5px 5px;
+      opacity: 0.6;
+    }
+
+    .letterpress-tile {
+      background: linear-gradient(160deg, #1c2823 0%, #131b16 100%);
+      border: 1px solid #2f3d36;
+      box-shadow:
+        inset 1px 1px 0 rgba(236,220,184,0.05),
+        inset -1px -1px 0 rgba(0,0,0,0.5),
+        0 2px 4px rgba(0,0,0,0.4);
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+      position: relative;
+    }
+    .letterpress-tile:hover {
+      transform: translateY(-2px);
+      box-shadow:
+        inset 1px 1px 0 rgba(236,220,184,0.1),
+        inset -1px -1px 0 rgba(0,0,0,0.4),
+        0 6px 12px rgba(0,0,0,0.6),
+        0 0 0 1px rgba(212,163,115,0.3);
+      z-index: 5;
+    }
+
+    .signal-buy    { background: linear-gradient(160deg, #dc2626 0%, #991b1b 100%); color: #fef2f2; }
+    .signal-sell   { background: linear-gradient(160deg, #16a34a 0%, #14532d 100%); color: #f0fdf4; }
+    .signal-hold   { background: linear-gradient(160deg, #ca8a04 0%, #713f12 100%); color: #fefce8; }
+    .signal-none   { background: repeating-linear-gradient(45deg, #1c2823 0, #1c2823 3px, #131b16 3px, #131b16 6px); color: #4a5750; }
+
+    .perf-bar { height: 3px; border-radius: 1px; opacity: 0.85; }
+
+    .tab-serif {
+      font-family: "IBM Plex Serif", Georgia, serif;
+      font-weight: 500;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      font-size: 11px;
+    }
+
+    @keyframes candle-in {
+      from { opacity: 0; transform: translateY(6px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .candle-in { animation: candle-in 0.4s ease both; }
+
+    @keyframes tab-mark-in {
+      from { transform: scaleX(0); }
+      to { transform: scaleX(1); }
+    }
+    .tab-mark-in { animation: tab-mark-in 0.35s cubic-bezier(0.5, 0, 0.3, 1) both; transform-origin: left; }
+
+    @keyframes pulse-dot {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.35; }
+    }
+    .pulse-dot { animation: pulse-dot 2.4s ease-in-out infinite; }
+
+    .stock-row { transition: background 0.18s ease, transform 0.18s ease; }
+    .stock-row:hover { background: rgba(212,163,115,0.06); }
+    .stock-row.active {
+      background: linear-gradient(90deg, rgba(212,163,115,0.16) 0%, rgba(212,163,115,0.02) 100%);
+      border-left: 3px solid #d4a373;
+    }
+
+    .divider-hatch {
+      background-image: repeating-linear-gradient(-45deg, #2a3630 0 1px, transparent 1px 4px);
+    }
+
+    .scroll-thin::-webkit-scrollbar { width: 6px; height: 6px; }
+    .scroll-thin::-webkit-scrollbar-track { background: transparent; }
+    .scroll-thin::-webkit-scrollbar-thumb { background: #2a3630; border-radius: 3px; }
+    .scroll-thin::-webkit-scrollbar-thumb:hover { background: #3a4a42; }
+
+    .tooltip-card {
+      pointer-events: none;
+      background: linear-gradient(180deg, #f2e7ce 0%, #e6d8b8 100%);
+      color: #1a1912;
+      border: 1px solid #a88a5c;
+      box-shadow:
+        0 20px 40px -10px rgba(0,0,0,0.7),
+        inset 0 0 30px rgba(139,108,63,0.1);
+      position: absolute;
+      z-index: 50;
+      min-width: 260px;
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script>
+    window.__SHAPE__ = {
+      pages: {},
+      context: null,
+      layout: null,
+      router: null,
+      canvas: null,
+      mocks: null,
+      utils: null,
+    };
+  </script>
+
+  <script type="text/babel" data-presets="react" src="./components/mocks.jsx"></script>
+  <script type="text/babel" data-presets="react" src="./components/AppContext.jsx"></script>
+  <script type="text/babel" data-presets="react" src="./components/WatchList.jsx"></script>
+  <script type="text/babel" data-presets="react" src="./components/KLineChart.jsx"></script>
+  <script type="text/babel" data-presets="react" src="./components/GaugeCluster.jsx"></script>
+  <script type="text/babel" data-presets="react" src="./components/ReportPaper.jsx"></script>
+  <script type="text/babel" data-presets="react" src="./components/AnalysisTabs.jsx"></script>
+  <script type="text/babel" data-presets="react" src="./components/PerformanceMatrix.jsx"></script>
+  <script type="text/babel" data-presets="react" src="./components/TopBar.jsx"></script>
+  <script type="text/babel" data-presets="react" src="./components/AppLayout.jsx"></script>
+  <script type="text/babel" data-presets="react" src="./components/App.jsx"></script>
+
+  <script type="text/babel" data-presets="react">
+    const rootEl = document.getElementById('root');
+    ReactDOM.render(React.createElement(window.__SHAPE__.pages.RootApp), rootEl);
+  </script>
+</body>
+</html>

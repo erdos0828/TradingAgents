@@ -29,6 +29,7 @@ _ENV_OVERRIDES = {
     "TRADINGAGENTS_OPENAI_REASONING_EFFORT": "openai_reasoning_effort",
     "TRADINGAGENTS_ANTHROPIC_EFFORT":        "anthropic_effort",
     "TRADINGAGENTS_DISABLE_THINKING":        "disable_thinking",
+    "TRADINGAGENTS_CACHE_TOOL_RESPONSES":    "cache_tool_responses",
 }
 
 
@@ -151,6 +152,26 @@ DEFAULT_CONFIG = _apply_env_overrides({
     # Tool-level configuration (takes precedence over category-level)
     "tool_vendors": {
         # Example: "get_stock_data": "alpha_vantage",  # Override category default
+    },
+    # Generic tool-response cache: routed vendor responses for news,
+    # fundamentals, macro, and prediction-market tools are stored in the
+    # shared SQLite cache DB (tool_response_cache table) and reused within
+    # the per-category TTL below. Identical calls — agent retries, multi-ticker
+    # runs sharing ticker-less tools, same-day re-runs — skip the external API.
+    # OHLCV tools are unaffected: they keep their dedicated freshness-aware
+    # cache. Failure sentinels (NO_DATA_AVAILABLE / DATA_UNAVAILABLE) are never
+    # cached, so a network blip cannot pin "no data" for a whole TTL window.
+    # Current analysis context. Set at run time by the graph/CLI entry points
+    # so that tool-response cache rows can record the ticker and trade date
+    # being analyzed, even for tools that do not take a ticker/date argument.
+    "analysis_ticker": None,
+    "analysis_date": None,
+    "cache_tool_responses": True,
+    "tool_cache_ttl_seconds": {
+        "news_data": 21600,           # 6h — news refreshes several times a day
+        "fundamental_data": 86400,    # 24h — statements update quarterly
+        "macro_data": 86400,          # 24h — FRED series update daily
+        "prediction_markets": 1800,   # 30min — probabilities move fast
     },
     # Benchmark for alpha calculation in the reflection layer.
     # ``benchmark_ticker`` (when set) overrides the suffix map for all
