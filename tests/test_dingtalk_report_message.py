@@ -53,9 +53,10 @@ def test_a_share_with_portfolio_name(sample_ohlcv, tmp_path):
     # Three recent trading days are shown.
     assert body.count("2026-09-") >= 3
     # Holding PnL is rendered inside the recent-data section.
-    assert body.index("**最近数据：**") < body.index("**持仓成本：**")
-    assert body.index("**持仓成本：**") < body.index("**最终决策：**")
-    assert "**总收益：**" in body
+    assert body.index("**最近数据：**") < body.index("**市值：**")
+    assert body.index("**市值：**") < body.index("**最终决策：**")
+    assert "**持仓盈亏：**" in body
+    assert "**当日盈亏：**" in body
 
 
 def test_recent_ohlcv_table_includes_change(sample_ohlcv, tmp_path):
@@ -96,12 +97,16 @@ def test_holding_pnl_calculation(sample_ohlcv, tmp_path):
     with patch("cli.main.load_ohlcv", return_value=sample_ohlcv):
         _, body = _build_dingtalk_report_message("600036.SS", "2026-09-17", save_path, {})
 
-    # Latest close is 40.80.
-    total_cost = 700 * 35.1053  # 24573.71
-    total_pnl = 700 * 40.80 - total_cost  # 3996.29
-    pnl_pct = total_pnl / total_cost * 100
-    assert f"**持仓成本：** {total_cost:,.2f}" in body
-    assert f"**总收益：** {total_pnl:+.2f} ({pnl_pct:+.2f}%)" in body
+    # Latest close is 40.80, previous close is 40.50.
+    market_value = 700 * 40.80
+    total_cost = 700 * 35.1053
+    position_pnl = market_value - total_cost
+    position_pnl_pct = position_pnl / total_cost * 100
+    daily_pnl = (40.80 - 40.50) * 700
+    daily_pct = (40.80 - 40.50) / 40.50 * 100
+    assert f"**市值：** ¥{market_value:,.2f}" in body
+    assert f"**持仓盈亏：** {position_pnl:+.2f} ({position_pnl_pct:+.2f}%)" in body
+    assert f"**当日盈亏：** {daily_pnl:+.2f} ({daily_pct:+.2f}%)" in body
 
 
 def test_non_holding_ticker_uses_resolved_identity(sample_ohlcv, tmp_path):
@@ -122,7 +127,7 @@ def test_non_holding_ticker_uses_resolved_identity(sample_ohlcv, tmp_path):
     assert "Tesla Inc（TSLA）" in title
     assert "**最近数据：**" in body
     # No holding section for a non-held ticker.
-    assert "**持仓成本：**" not in body
+    assert "**市值：**" not in body
 
 
 def test_missing_ohlcv_gracefully(sample_ohlcv, tmp_path):
@@ -143,4 +148,4 @@ def test_missing_ohlcv_gracefully(sample_ohlcv, tmp_path):
     assert "Microsoft（MSFT）" in title
     assert "**最近数据：**" not in body
     # No holding section when latest close is unknown.
-    assert "**持仓成本：**" not in body
+    assert "**市值：**" not in body

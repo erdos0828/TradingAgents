@@ -1019,18 +1019,20 @@ def _load_portfolio_holding(ticker: str) -> dict | None:
     return None
 
 
-def _format_recent_ohlcv(ticker: str, analysis_date: str, days: int = 3) -> tuple[str, float | None]:
-    """Return a markdown table of the most recent OHLCV rows and the latest close."""
+def _format_recent_ohlcv(
+    ticker: str, analysis_date: str, days: int = 3
+) -> tuple[str, float | None, float | None]:
+    """Return a markdown table, latest close, and previous close."""
     try:
         df = load_ohlcv(ticker, analysis_date)
     except Exception:
-        return "", None
+        return "", None, None
     if df is None or df.empty or "Close" not in df.columns:
-        return "", None
+        return "", None, None
 
     df = df.sort_values("Date").tail(days + 1)
     if len(df) < 2:
-        return "", None
+        return "", None, None
 
     rows = []
     prev_close = None
@@ -1057,20 +1059,42 @@ def _format_recent_ohlcv(ticker: str, analysis_date: str, days: int = 3) -> tupl
         "| --- | --- | --- | --- | --- | --- |\n"
         + "\n".join(rows[1:])
     )
-    return table, latest_close
+    prev_close = float(df.iloc[-2]["Close"]) if len(df) >= 2 else None
+    return table, latest_close, prev_close
 
 
-def _format_holding_pnl(holding: dict, current_price: float) -> str:
-    """Return a markdown line for total cost, PnL and return rate."""
+def _currency_symbol(ticker: str) -> str:
+    """Return ¥ for A-share tickers, $ otherwise."""
+    if ticker.endswith(".SS") or ticker.endswith(".SZ") or ticker.endswith(".BJ"):
+        return "¥"
+    return "$"
+
+
+def _format_holding_pnl(
+    holding: dict, current_price: float, prev_close: float | None, ticker: str
+) -> str:
+    """Return a Dashboard-aligned markdown block for a holding."""
     quantity = holding["quantity"]
     cost_price = holding["cost_price"]
-    total_cost = quantity * cost_price
+    symbol = _currency_symbol(ticker)
+
     market_value = quantity * current_price
-    total_pnl = market_value - total_cost
-    pnl_pct = (total_pnl / total_cost * 100) if total_cost else 0.0
+    total_cost = quantity * cost_price
+    position_pnl = market_value - total_cost
+    position_pnl_pct = (position_pnl / total_cost * 100) if total_cost else 0.0
+
+    if prev_close:
+        daily_pnl = (current_price - prev_close) * quantity
+        daily_pct = (current_price - prev_close) / prev_close * 100
+    else:
+        daily_pnl = 0.0
+        daily_pct = 0.0
+
     return (
-        f"**持仓成本：** {total_cost:,.2f}\n\n"
-        f"**总收益：** {total_pnl:+.2f} ({pnl_pct:+.2f}%)"
+        f"**市值：** {symbol}{market_value:,.2f}　**数量：** {quantity:,.0f}\n\n"
+        f"**现价：** {symbol}{current_price:,.2f}　**成本：** {symbol}{cost_price:,.4f}\n\n"
+        f"**当日盈亏：** {daily_pnl:+.2f} ({daily_pct:+.2f}%)\n\n"
+        f"**持仓盈亏：** {position_pnl:+.2f} ({position_pnl_pct:+.2f}%)"
     )
 
 
@@ -1103,10 +1127,10 @@ def _build_dingtalk_report_message(
     if len(decision) > max_chars:
         decision = decision[:max_chars] + "\n\n...（内容已截断）"
 
-    recent_table, latest_close = _format_recent_ohlcv(ticker, analysis_date)
+    recent_table, latest_close, prev_close = _format_recent_ohlcv(ticker, analysis_date)
     holding_lines = ""
     if holding and latest_close is not None and latest_close > 0:
-        holding_lines = "\n\n" + _format_holding_pnl(holding, latest_close)
+        holding_lines = "\n\n" + _format_holding_pnl(holding, latest_close, prev_close, ticker)
     recent_section = (
         f"**最近数据：**\n\n{recent_table}{holding_lines}\n\n"
         if recent_table
