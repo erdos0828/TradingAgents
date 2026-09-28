@@ -12,7 +12,7 @@ import time
 import urllib.parse
 from collections import deque
 from collections.abc import Callable
-from contextlib import nullcontext
+from contextlib import nullcontext, suppress
 from functools import wraps
 from pathlib import Path
 
@@ -59,6 +59,7 @@ from tradingagents.agents.utils.agent_utils import resolve_instrument_identity
 from tradingagents.dataflows.config import get_config, set_config
 from tradingagents.dataflows.stockstats_utils import load_ohlcv
 from tradingagents.default_config import DEFAULT_CONFIG
+from tradingagents.dingtalk_bot import get_bot_from_env
 from tradingagents.graph.analyst_execution import (
     AnalystWallTimeTracker,
     build_analyst_execution_plan,
@@ -1638,14 +1639,46 @@ def run_analysis(
                     save_path,
                     final_state,
                 )
-                _send_dingtalk_webhook(
-                    webhook_url,
-                    webhook_secret,
-                    title,
-                    markdown_text,
-                    at_mobiles=at_mobiles,
-                    is_at_all=at_all,
-                )
+
+                # If enterprise-app credentials are configured, generate a chart
+                # snapshot and send it through the DingTalkBot image-upload path.
+                # Otherwise fall back to the existing webhook-only delivery.
+                bot = get_bot_from_env()
+                image_path: Path | None = None
+                if bot.has_credentials():
+                    try:
+                        from tradingagents import chart_screenshot
+
+                        screenshot_path = save_path / f"{selections['ticker']}_snapshot.png"
+                        image_path = chart_screenshot.generate_stock_screenshot(
+                            ticker=selections["ticker"],
+                            analysis_date=selections["analysis_date"],
+                            output_path=screenshot_path,
+                        )
+                        if image_path:
+                            console.print(f"[green]✓ Snapshot saved:[/green] {image_path}")
+                    except Exception as e:
+                        console.print(f"[yellow]Snapshot generation skipped: {e}[/yellow]")
+
+                if bot.has_credentials():
+                    bot.send_webhook_message(
+                        webhook_url=webhook_url,
+                        title=title,
+                        markdown_text=markdown_text,
+                        image_path=image_path,
+                        webhook_secret=webhook_secret,
+                        at_mobiles=at_mobiles,
+                        is_at_all=at_all,
+                    )
+                else:
+                    _send_dingtalk_webhook(
+                        webhook_url,
+                        webhook_secret,
+                        title,
+                        markdown_text,
+                        at_mobiles=at_mobiles,
+                        is_at_all=at_all,
+                    )
                 console.print("[green]✓ DingTalk notification sent.[/green]")
             except Exception as e:
                 console.print(f"[red]Error sending DingTalk notification: {e}[/red]")
@@ -1885,10 +1918,8 @@ def _stop_server(port: int) -> bool:
 
     if _is_process_alive(pid):
         console.print("[red]Server did not stop gracefully, sending SIGKILL.[/red]")
-        try:
+        with suppress(ProcessLookupError):
             os.kill(pid, signal.SIGKILL)
-        except ProcessLookupError:
-            pass
         for _ in range(20):
             if not _is_process_alive(pid):
                 break
